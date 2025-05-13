@@ -97,4 +97,71 @@ window.onload = () => {
   urlInput.addEventListener('input', () => {
     localStorage.setItem('customGameUrl', urlInput.value);
   });
+
+  // Theme toggle logic
+  const themeToggle = document.getElementById('theme-toggle');
+  const themeLabel = document.getElementById('theme-label');
+
+  function setTheme(mode) {
+    if (mode === 'light') {
+      document.body.style.background = '#f5f6fa';
+      document.body.style.color = '#23272a';
+      themeLabel.textContent = 'Light Mode';
+      // Update other elements for light mode
+      document.querySelectorAll('button').forEach(btn => {
+        btn.style.background = '#e3e5e8';
+        btn.style.color = '#23272a';
+      });
+      document.querySelectorAll('.news-item').forEach(div => {
+        div.style.background = '#fff';
+        div.style.color = '#23272a';
+      });
+      const updateDiv = document.getElementById('update');
+      if (updateDiv) {
+        updateDiv.style.background = '#fff';
+        updateDiv.style.color = '#23272a';
+        updateDiv.style.borderLeft = '4px solid #0078d7';
+      }
+      const toast = document.getElementById('toast');
+      if (toast) {
+        toast.style.background = '#e3e5e8';
+        toast.style.color = '#23272a';
+      }
+      document.querySelectorAll('a').forEach(a => { a.style.color = '#0078d7'; });
+    } else {
+      document.body.style.background = '#23272a';
+      document.body.style.color = '#f5f6fa';
+      themeLabel.textContent = 'Dark Mode';
+      document.querySelectorAll('button').forEach(btn => {
+        btn.style.background = '#2c2f33';
+        btn.style.color = '#f5f6fa';
+      });
+      document.querySelectorAll('.news-item').forEach(div => {
+        div.style.background = '#2c2f33';
+        div.style.color = '#f5f6fa';
+      });
+      const updateDiv = document.getElementById('update');
+      if (updateDiv) {
+        updateDiv.style.background = '#2c2f33';
+        updateDiv.style.color = '#f5f6fa';
+        updateDiv.style.borderLeft = '4px solid #7289da';
+      }
+      const toast = document.getElementById('toast');
+      if (toast) {
+        toast.style.background = '#111417';
+        toast.style.color = '#f5f6fa';
+      }
+      document.querySelectorAll('a').forEach(a => { a.style.color = '#7289da'; });
+    }
+    localStorage.setItem('theme', mode);
+  }
+
+  // Load theme preference
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  themeToggle.checked = savedTheme === 'dark';
+  setTheme(savedTheme);
+
+  themeToggle.onchange = () => {
+    setTheme(themeToggle.checked ? 'dark' : 'light');
+  };
 }; 
