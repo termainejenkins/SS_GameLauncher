@@ -1,0 +1,13 @@
+# DevLog: SS_GameLauncher
+
+## Credits
+Created by Termaine Jenkins (aka TJ, SENTIENT SOLUTIONS LLC)
+
+---
+
+### 2025-05-13
+- Project initialized with backend (Node.js + Express + TypeScript) and launcher-app (Electron).
+- Added sample /news endpoint to backend.
+- Launcher fetches news and displays it in the UI.
+- Documentation scaffolding started.
+- Added unified start command with concurrently to run backend and launcher-app together. 

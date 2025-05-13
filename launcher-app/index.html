@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=800, initial-scale=1.0">
+  <title>SS Games Launcher</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    button { margin: 10px 0; padding: 10px 20px; font-size: 16px; }
+    #news { margin-top: 30px; }
+    .news-item { margin-bottom: 15px; }
+  </style>
+</head>
+<body>
+  <h1>SS Games Launcher</h1>
+  <div>
+    <label><input type="radio" name="launch-method" value="steam" checked> Launch via Steam</label>
+    <label><input type="radio" name="launch-method" value="url"> Launch via URL</label>
+    <input type="text" id="custom-url" placeholder="Enter game URL" style="width:300px;" disabled>
+  </div>
+  <button id="play-ue4">Play UE4 Game</button><br>
+  <button id="play-web">Play Web Game</button>
+  <div id="news">
+    <h2>News</h2>
+    <div id="news-list">Loading news...</div>
+  </div>
+  <div id="toast" style="display:none; position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:16px 32px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.2); font-size:16px; z-index:1000; transition:opacity 0.3s; opacity:0;"></div>
+  <footer style="margin-top:40px; text-align:center; color:#888; font-size:14px;">
+    &copy; 2025 SENTIENT SOLUTIONS LLC. All rights reserved.
+  </footer>
+  <script src="renderer.js"></script>
+</body>
+</html> 
