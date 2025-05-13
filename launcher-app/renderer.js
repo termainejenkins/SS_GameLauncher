@@ -231,4 +231,25 @@ window.onload = () => {
         });
     };
   }
+
+  // Web game embedding logic
+  const webgameModal = document.getElementById('webgame-modal');
+  const webgameFrame = document.getElementById('webgame-frame');
+  const playWebBtn = document.getElementById('play-web');
+  const closeWebgameBtn = document.getElementById('close-webgame');
+
+  if (playWebBtn && webgameModal && webgameFrame) {
+    playWebBtn.onclick = () => {
+      // Use saved URL if available, else default
+      const savedUrl = localStorage.getItem('customGameUrl') || 'https://example.com/webgame';
+      webgameFrame.src = savedUrl;
+      webgameModal.style.display = 'flex';
+    };
+  }
+  if (closeWebgameBtn && webgameModal) {
+    closeWebgameBtn.onclick = () => {
+      webgameModal.style.display = 'none';
+      webgameFrame.src = '';
+    };
+  }
 }; 
