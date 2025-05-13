@@ -18,6 +18,9 @@ window.onload = () => {
       document.getElementById('news-list').innerText = 'Failed to load news.';
     });
 
+  // Simulated local game version
+  const localGameVersion = '1.0.0';
+
   // Fetch latest update info from backend
   fetch('http://localhost:3000/updates')
     .then(res => res.json())
@@ -27,9 +30,12 @@ window.onload = () => {
       if (update && update.version) {
         updateDiv.style.display = 'block';
         updateContent.innerHTML = `<strong>Version:</strong> ${update.version}<br><strong>Date:</strong> ${update.date}<br><strong>Notes:</strong> ${update.notes}`;
-        // Optionally add download link if present
         if (update.downloadUrl) {
           updateContent.innerHTML += `<br><a href="${update.downloadUrl}" target="_blank">Download Update</a>`;
+        }
+        // Version comparison and update prompt
+        if (update.version !== localGameVersion) {
+          showToast(`A new game update (v${update.version}) is available!`);
         }
       } else {
         updateDiv.style.display = 'none';

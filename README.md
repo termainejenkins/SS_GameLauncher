@@ -47,4 +47,7 @@ npm start
 - UI/UX enhancements (modern design, dark/light mode)
 - Web game embedding in the launcher
 - Multi-language support
-- Error reporting and troubleshooting tools 
+- Error reporting and troubleshooting tools
+- Dark/Light mode toggle for user preference
+- Version comparison and update prompt for game updates
+- Enhanced news feed with support for images, links, and HTML formatting 

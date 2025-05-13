@@ -10,7 +10,8 @@ app.use(express.json());
 // Sample news data
 const news = [
   { id: 1, title: 'Welcome to the Game!', content: 'Stay tuned for updates.' },
-  { id: 2, title: 'Patch 1.0 Released', content: 'First patch is live!' }
+  { id: 2, title: 'Patch 1.0 Released', content: 'First patch is live!' },
+  { id: 3, title: 'Check out our new trailer!', content: '<img src="https://via.placeholder.com/400x200?text=Game+Trailer" alt="Game Trailer" style="max-width:100%;border-radius:6px;"> <br> <a href="https://example.com/trailer" target="_blank">Watch the trailer</a>' }
 ];
 
 // Sample update/patch data
