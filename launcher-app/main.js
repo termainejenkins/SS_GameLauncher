@@ -3,6 +3,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const fs = require('fs');
 const https = require('https');
+const crypto = require('crypto');
 
 // Path to your UE4 game executable (update this as needed)
 const UE4_GAME_PATH = 'C:/Path/To/Your/UE4Game.exe';
@@ -70,8 +71,15 @@ ipcMain.on('download-ue4', (event, savePath) => {
     });
     file.on('finish', () => {
       file.close(() => {
-        event.sender.send('download-ue4-complete', savePath);
-        shell.showItemInFolder(savePath);
+        // Compute SHA256 checksum
+        const hash = crypto.createHash('sha256');
+        const stream = fs.createReadStream(savePath);
+        stream.on('data', data => hash.update(data));
+        stream.on('end', () => {
+          const checksum = hash.digest('hex');
+          event.sender.send('download-ue4-complete', savePath, checksum);
+          shell.showItemInFolder(savePath);
+        });
       });
     });
   }).on('error', (err) => {

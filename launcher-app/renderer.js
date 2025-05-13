@@ -282,12 +282,12 @@ window.onload = () => {
         progressStatus.textContent = `Downloading... ${percent}%`;
       }
     });
-    ipcRenderer.on('download-ue4-complete', (event, filePath) => {
+    ipcRenderer.on('download-ue4-complete', (event, filePath, checksum) => {
       if (progressContainer && progressBar && progressStatus) {
         progressBar.style.width = '100%';
-        progressStatus.textContent = `Download complete: ${filePath}`;
+        progressStatus.textContent = `Download complete: ${filePath}\nSHA256: ${checksum}`;
       }
-      showToast('Download complete!');
+      showToast('Download complete! SHA256: ' + checksum);
     });
     ipcRenderer.on('download-ue4-error', (event, error) => {
       if (progressContainer && progressBar && progressStatus) {
