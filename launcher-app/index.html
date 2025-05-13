@@ -74,9 +74,16 @@
   </div>
   <div id="game-buttons" style="display:flex; gap:16px; flex-wrap:wrap; margin: 24px 0;">
     <button id="play-ue4">THE GREAT CIRCLE</button>
+    <button id="download-ue4" style="background:#7289da; color:#fff;">Download</button>
     <button id="play-web">The Great Circle Web</button>
     <button id="play-before">THE GREAT BEFORE</button>
     <button id="play-pacific">THE GREAT PACIFIC</button>
+  </div>
+  <div id="download-progress-container" style="display:none; margin-top:10px; width:100%; max-width:400px;">
+    <div style="background:#444; border-radius:4px; overflow:hidden; height:18px;">
+      <div id="download-progress" style="background:#7289da; width:0%; height:18px; transition:width 0.2s;"></div>
+    </div>
+    <div id="download-status" style="margin-top:4px; font-size:14px; color:#aaa;"></div>
   </div>
   <div id="update" style="margin-bottom:30px; display:none; background:#f5f5f5; border-left:4px solid #0078d7; padding:16px 24px; border-radius:6px;">
     <h2 style="margin-top:0;">Latest Update</h2>

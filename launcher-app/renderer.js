@@ -252,4 +252,46 @@ window.onload = () => {
       webgameFrame.src = '';
     };
   }
+
+  // Download logic for THE GREAT CIRCLE
+  const downloadBtn = document.getElementById('download-ue4');
+  const progressContainer = document.getElementById('download-progress-container');
+  const progressBar = document.getElementById('download-progress');
+  const progressStatus = document.getElementById('download-status');
+
+  if (downloadBtn) {
+    downloadBtn.onclick = () => {
+      window.electronAPI?.downloadUE4?.(); // For preload, fallback to IPC below
+      if (window.require) {
+        const { ipcRenderer } = require('electron');
+        ipcRenderer.send('download-ue4');
+      }
+    };
+  }
+
+  if (window.require) {
+    const { ipcRenderer } = require('electron');
+    ipcRenderer.on('download-ue4-progress', (event, percent) => {
+      if (progressContainer && progressBar && progressStatus) {
+        progressContainer.style.display = 'block';
+        progressBar.style.width = percent + '%';
+        progressStatus.textContent = `Downloading... ${percent}%`;
+      }
+    });
+    ipcRenderer.on('download-ue4-complete', (event, filePath) => {
+      if (progressContainer && progressBar && progressStatus) {
+        progressBar.style.width = '100%';
+        progressStatus.textContent = `Download complete: ${filePath}`;
+      }
+      showToast('Download complete!');
+    });
+    ipcRenderer.on('download-ue4-error', (event, error) => {
+      if (progressContainer && progressBar && progressStatus) {
+        progressContainer.style.display = 'none';
+        progressBar.style.width = '0%';
+        progressStatus.textContent = '';
+      }
+      showToast('Download failed: ' + error);
+    });
+  }
 }; 
