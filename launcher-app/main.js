@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const { execFile } = require('child_process');
 const fs = require('fs');
@@ -38,10 +38,26 @@ ipcMain.on('launch-ue4', (event, arg) => {
   }
 });
 
-ipcMain.on('download-ue4', (event) => {
+ipcMain.on('choose-download-location', async (event) => {
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    title: 'Save UE4 Game Installer',
+    defaultPath: require('os').homedir() + '/Downloads/UE4GameInstaller.bin',
+    buttonLabel: 'Save Installer',
+    filters: [
+      { name: 'Binary', extensions: ['bin', 'exe', 'zip'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+  if (!canceled && filePath) {
+    event.sender.send('download-location-chosen', filePath);
+  }
+});
+
+ipcMain.on('download-ue4', (event, savePath) => {
   // Placeholder file URL (test file)
   const fileUrl = 'https://speed.hetzner.de/100MB.bin';
-  const savePath = path.join(require('os').homedir(), 'Downloads', 'UE4GameInstaller.bin');
+  const fs = require('fs');
+  const https = require('https');
   const file = fs.createWriteStream(savePath);
   https.get(fileUrl, (response) => {
     const total = parseInt(response.headers['content-length'], 10);

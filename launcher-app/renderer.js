@@ -261,16 +261,20 @@ window.onload = () => {
 
   if (downloadBtn) {
     downloadBtn.onclick = () => {
-      window.electronAPI?.downloadUE4?.(); // For preload, fallback to IPC below
       if (window.require) {
         const { ipcRenderer } = require('electron');
-        ipcRenderer.send('download-ue4');
+        ipcRenderer.send('choose-download-location');
       }
     };
   }
 
   if (window.require) {
     const { ipcRenderer } = require('electron');
+    ipcRenderer.on('download-location-chosen', (event, filePath) => {
+      if (filePath) {
+        ipcRenderer.send('download-ue4', filePath);
+      }
+    });
     ipcRenderer.on('download-ue4-progress', (event, percent) => {
       if (progressContainer && progressBar && progressStatus) {
         progressContainer.style.display = 'block';
