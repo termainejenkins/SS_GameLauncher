@@ -56,13 +56,16 @@ window.onload = () => {
 
   document.getElementById('play-ue4').onclick = () => {
     if (steamRadio.checked) {
+      sendAnalytics('launch_ue4_game', { method: 'steam' });
       ipcRenderer.send('launch-ue4', { method: 'steam' });
     } else {
       const url = urlInput.value.trim();
       if (!url) {
-        alert('Please enter a URL to launch.');
+        showToast('Please enter a URL to launch.');
+        sendAnalytics('launch_ue4_game_error', { error: 'No URL entered' });
         return;
       }
+      sendAnalytics('launch_ue4_game', { method: 'url', url });
       ipcRenderer.send('launch-ue4', { method: 'url', url });
     }
   };
@@ -88,6 +91,7 @@ window.onload = () => {
         msg = 'Steam reported a license error. Please ensure you own the demo and try again later. If the problem persists, it may be a temporary Steam issue.';
       }
       showToast(msg);
+      sendAnalytics('launch_ue4_game_error', { error: result.error });
     }
   });
 
@@ -170,4 +174,55 @@ window.onload = () => {
   themeToggle.onchange = () => {
     setTheme(themeToggle.checked ? 'dark' : 'light');
   };
+
+  // Analytics consent logic
+  const analyticsToggle = document.getElementById('analytics-toggle');
+  const analyticsLabel = document.getElementById('analytics-label');
+  function isAnalyticsEnabled() {
+    return localStorage.getItem('analytics') === 'true';
+  }
+  function setAnalytics(enabled) {
+    localStorage.setItem('analytics', enabled ? 'true' : 'false');
+    analyticsToggle.checked = enabled;
+    analyticsLabel.textContent = enabled ? 'Analytics Enabled' : 'Enable Analytics';
+  }
+  analyticsToggle.onchange = () => setAnalytics(analyticsToggle.checked);
+  setAnalytics(isAnalyticsEnabled());
+
+  function sendAnalytics(event, data = {}) {
+    if (!isAnalyticsEnabled()) return;
+    fetch('http://localhost:3000/analytics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, ...data, timestamp: new Date().toISOString() })
+    }).catch(() => {});
+  }
+
+  // Track launcher open
+  sendAnalytics('launcher_open');
+
+  // Error reporting form logic
+  const errorMsgInput = document.getElementById('error-message');
+  const submitErrorBtn = document.getElementById('submit-error');
+  if (submitErrorBtn) {
+    submitErrorBtn.onclick = () => {
+      const msg = errorMsgInput.value.trim();
+      if (!msg) {
+        showToast('Please enter a bug description.');
+        return;
+      }
+      fetch('http://localhost:3000/analytics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'user_bug_report', message: msg, timestamp: new Date().toISOString() })
+      })
+        .then(() => {
+          showToast('Thank you for your report!');
+          errorMsgInput.value = '';
+        })
+        .catch(() => {
+          showToast('Failed to submit report.');
+        });
+    };
+  }
 }; 

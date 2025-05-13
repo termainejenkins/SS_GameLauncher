@@ -43,7 +43,8 @@ npm start
 - Download/install management for non-Steam builds
 - Enhanced news feed (images, links, markdown)
 - User settings/preferences (theme, default launch method, saved URLs)
-- Analytics/event tracking (with user consent)
+- Analytics/event tracking with user consent (launcher open, game launch, errors)
+- In-app bug report form for user-submitted error reports
 - UI/UX enhancements (modern design, dark/light mode)
 - Web game embedding in the launcher
 - Multi-language support

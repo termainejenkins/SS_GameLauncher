@@ -14,4 +14,6 @@ Created by Termaine Jenkins (aka TJ, SENTIENT SOLUTIONS LLC)
 - Discussed and planned possible next features for the launcher, including update notifications, authentication, download management, enhanced news, settings, analytics, UI/UX improvements, web game embedding, multi-language support, and error reporting.
 - Implemented dark/light mode toggle for the launcher UI.
 - Added version comparison and update prompt for game updates.
-- Enhanced news feed to support images, links, and HTML formatting in news items. 
+- Enhanced news feed to support images, links, and HTML formatting in news items.
+- Added analytics/event tracking with user consent (launcher open, game launch, errors).
+- Added in-app bug report form for user-submitted error reports. 
