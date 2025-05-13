@@ -126,12 +126,15 @@ window.onload = () => {
         div.style.background = '#fff';
         div.style.color = '#23272a';
       });
+      // Update Latest Update section
       const updateDiv = document.getElementById('update');
       if (updateDiv) {
         updateDiv.style.background = '#fff';
         updateDiv.style.color = '#23272a';
         updateDiv.style.borderLeft = '4px solid #0078d7';
       }
+      const updateH2 = document.querySelector('#update h2');
+      if (updateH2) updateH2.style.color = '#0078d7';
       const toast = document.getElementById('toast');
       if (toast) {
         toast.style.background = '#e3e5e8';
@@ -150,12 +153,15 @@ window.onload = () => {
         div.style.background = '#2c2f33';
         div.style.color = '#f5f6fa';
       });
+      // Update Latest Update section
       const updateDiv = document.getElementById('update');
       if (updateDiv) {
         updateDiv.style.background = '#2c2f33';
         updateDiv.style.color = '#f5f6fa';
         updateDiv.style.borderLeft = '4px solid #7289da';
       }
+      const updateH2 = document.querySelector('#update h2');
+      if (updateH2) updateH2.style.color = '#7289da';
       const toast = document.getElementById('toast');
       if (toast) {
         toast.style.background = '#111417';
