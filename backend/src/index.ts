@@ -32,6 +32,11 @@ app.get('/updates', (req, res) => {
   res.json(updates[0]); // Return the latest update
 });
 
+app.post('/analytics', (req, res) => {
+  console.log('Analytics event:', req.body);
+  res.json({ status: 'ok' });
+});
+
 app.listen(PORT, () => {
   console.log(`Backend API server running on http://localhost:${PORT}`);
 }); 
