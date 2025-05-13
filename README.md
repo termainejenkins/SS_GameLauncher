@@ -35,4 +35,16 @@ npm start
 ## Next Steps
 - Integrate UE4 game launching logic
 - Set web game URL in `renderer.js`
-- Expand backend for updates, authentication, etc. 
+- Expand backend for updates, authentication, etc.
+
+## Possible Next Features
+- Game update/patch notifications
+- User authentication (Steam, Google, email, etc.)
+- Download/install management for non-Steam builds
+- Enhanced news feed (images, links, markdown)
+- User settings/preferences (theme, default launch method, saved URLs)
+- Analytics/event tracking (with user consent)
+- UI/UX enhancements (modern design, dark/light mode)
+- Web game embedding in the launcher
+- Multi-language support
+- Error reporting and troubleshooting tools 

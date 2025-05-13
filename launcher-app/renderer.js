@@ -56,7 +56,11 @@ window.onload = () => {
     if (result.success) {
       showToast('UE4 game launched!');
     } else {
-      showToast('Failed to launch UE4 game: ' + result.error);
+      let msg = 'Failed to launch UE4 game: ' + result.error;
+      if (result.error && result.error.toLowerCase().includes('license')) {
+        msg = 'Steam reported a license error. Please ensure you own the demo and try again later. If the problem persists, it may be a temporary Steam issue.';
+      }
+      showToast(msg);
     }
   });
 
