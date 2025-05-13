@@ -18,6 +18,27 @@ window.onload = () => {
       document.getElementById('news-list').innerText = 'Failed to load news.';
     });
 
+  // Fetch latest update info from backend
+  fetch('http://localhost:3000/updates')
+    .then(res => res.json())
+    .then(update => {
+      const updateDiv = document.getElementById('update');
+      const updateContent = document.getElementById('update-content');
+      if (update && update.version) {
+        updateDiv.style.display = 'block';
+        updateContent.innerHTML = `<strong>Version:</strong> ${update.version}<br><strong>Date:</strong> ${update.date}<br><strong>Notes:</strong> ${update.notes}`;
+        // Optionally add download link if present
+        if (update.downloadUrl) {
+          updateContent.innerHTML += `<br><a href="${update.downloadUrl}" target="_blank">Download Update</a>`;
+        }
+      } else {
+        updateDiv.style.display = 'none';
+      }
+    })
+    .catch(() => {
+      document.getElementById('update').style.display = 'none';
+    });
+
   // Launch method radio buttons and URL input
   const steamRadio = document.querySelector('input[name="launch-method"][value="steam"]');
   const urlRadio = document.querySelector('input[name="launch-method"][value="url"]');
