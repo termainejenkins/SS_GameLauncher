@@ -86,4 +86,13 @@ ipcMain.on('download-ue4', (event, savePath) => {
     fs.unlink(savePath, () => {});
     event.sender.send('download-ue4-error', err.message);
   });
+});
+
+ipcMain.on('run-installer', (event, filePath) => {
+  const { execFile } = require('child_process');
+  execFile(filePath, (error) => {
+    if (error) {
+      event.sender.send('download-ue4-error', 'Failed to launch installer: ' + error.message);
+    }
+  });
 }); 

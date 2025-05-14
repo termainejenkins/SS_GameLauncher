@@ -288,6 +288,11 @@ window.onload = () => {
         progressStatus.textContent = `Download complete: ${filePath}\nSHA256: ${checksum}`;
       }
       showToast('Download complete! SHA256: ' + checksum);
+      setTimeout(() => {
+        if (confirm('Download complete! Would you like to run the installer now?')) {
+          ipcRenderer.send('run-installer', filePath);
+        }
+      }, 500);
     });
     ipcRenderer.on('download-ue4-error', (event, error) => {
       if (progressContainer && progressBar && progressStatus) {
@@ -297,5 +302,39 @@ window.onload = () => {
       }
       showToast('Download failed: ' + error);
     });
+  }
+
+  // Analytics consent modal on first launch
+  if (!localStorage.getItem('analyticsConsentAsked')) {
+    const modal = document.createElement('div');
+    modal.style.position = 'fixed';
+    modal.style.top = 0;
+    modal.style.left = 0;
+    modal.style.width = '100vw';
+    modal.style.height = '100vh';
+    modal.style.background = 'rgba(30,32,34,0.98)';
+    modal.style.zIndex = 3000;
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.innerHTML = `
+      <div style="background:#23272a; color:#f5f6fa; padding:32px 40px; border-radius:10px; max-width:400px; text-align:center; box-shadow:0 4px 32px rgba(0,0,0,0.5);">
+        <h2>Help Us Improve!</h2>
+        <p>May we collect anonymous usage statistics to improve the launcher and your experience?</p>
+        <button id="consent-yes" style="margin:12px 16px 0 0; padding:8px 24px; background:#7289da; color:#fff; border:none; border-radius:4px; cursor:pointer;">Yes, I agree</button>
+        <button id="consent-no" style="margin:12px 0 0 0; padding:8px 24px; background:#2c2f33; color:#fff; border:none; border-radius:4px; cursor:pointer;">No, thanks</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.getElementById('consent-yes').onclick = () => {
+      setAnalytics(true);
+      localStorage.setItem('analyticsConsentAsked', 'true');
+      document.body.removeChild(modal);
+    };
+    document.getElementById('consent-no').onclick = () => {
+      setAnalytics(false);
+      localStorage.setItem('analyticsConsentAsked', 'true');
+      document.body.removeChild(modal);
+    };
   }
 }; 
