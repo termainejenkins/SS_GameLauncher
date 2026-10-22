@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('launcher', {
   getUpdateStatus: () => ipcRenderer.invoke('updater:status'),
   installUpdate: () => ipcRenderer.invoke('updater:install'),
   onUpdateStatus: (cb) => on('updater:status', cb),
+  // This launcher's own version (app.getVersion() in main), for the label in the sidebar.
+  getVersion: () => ipcRenderer.invoke('updater:status').then((s) => (s && s.current) || ''),
 
   // Download / installer
   chooseDownloadLocation: () => ipcRenderer.invoke('download:choose-location'),

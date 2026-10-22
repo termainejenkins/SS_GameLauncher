@@ -230,6 +230,12 @@ const good = { v: 1, steamid: '76561198000000000', discord_id: '1', entitlements
       assert.ok(!('publisherName' in (pkg.build.win || {})) && !('verifyUpdateCodeSignature' in (pkg.build.win || {})));
       assert.ok(pkg.build.files.includes('updater.js')); assert.ok(pkg.dependencies['electron-updater']);
     });
+    await t('ui: launcher version label is wired (index.html #launcher-version, preload getVersion, renderer fills it)', () => {
+      const fs = require('fs'); const path = require('path'); const rd = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+      assert.ok(rd('index.html').includes('id="launcher-version"'));
+      assert.ok(/getVersion:\s*\(\)\s*=>\s*ipcRenderer\.invoke\('updater:status'\)/.test(rd('preload.js')));
+      assert.ok(rd('renderer.js').includes('SS Game Launcher v${v}'));
+    });
   }
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
   process.exit(failed ? 1 : 0);
