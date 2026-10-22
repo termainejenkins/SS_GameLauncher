@@ -392,6 +392,8 @@ body.theme-light #toast { background: #fff7e8; }
 .consent h2 { font-size: 30px; margin-bottom: 8px; }
 .consent p { color: var(--muted); line-height: 1.5; }
 .consent .row { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
+/* Play help (no game owned / Steam closed): same modal, smaller heading for the longer title */
+.consent.play-help h2 { font-size: 22px; line-height: 1.25; }
 
 @media (max-width: 1100px) {
   .columns { grid-template-columns: 1fr; }

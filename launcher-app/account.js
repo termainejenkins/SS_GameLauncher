@@ -98,9 +98,25 @@ function removeEntitlementFile() {
   try { fs.unlinkSync(entitlementFilePath()); } catch (_) { /* not there */ }
 }
 
+/**
+ * Pure: what Play should do after a Steam ownership probe (tryApps('probe')).
+ *   owns full game or demo -> { appId }
+ *   steam_not_owned        -> { appId: null, code: 'not_owned' }          (Play must not open steam://run)
+ *   steam_not_running      -> { appId: null, code: 'steam_not_running' }  (ask the player to start Steam)
+ *   anything else (helper missing, timeout, ...) -> we can't tell, so fall back to DEFAULT_LAUNCH_APP_ID.
+ */
+function launchDecisionFromProbe(p, defaultAppId = cfg.DEFAULT_LAUNCH_APP_ID) {
+  if (p && p.ok && cfg.STEAM_APP_IDS.includes(Number(p.appid))) return { appId: Number(p.appid), code: null };
+  const code = (p && p.code) || 'probe_failed';
+  if (code === 'steam_not_owned') return { appId: null, code: 'not_owned' };
+  if (code === 'steam_not_running') return { appId: null, code: 'steam_not_running' };
+  return { appId: defaultAppId, code };
+}
+
 // ---------------- account manager ----------------
 
-function createAccountManager({ app, safeStorage, shell, utilityProcess }) {
+// isSteamRunning is injectable for scripts/selftest.js only; the launcher always uses the tasklist check.
+function createAccountManager({ app, safeStorage, shell, utilityProcess, isSteamRunning = isSteamProcessRunning }) {
   const sessionFile = () => path.join(app.getPath('userData'), 'account_session.bin');
   let memSession = null; // fallback when OS encryption isn't available (session then lasts until the launcher closes)
   let linkAbort = null;
@@ -224,7 +240,7 @@ function createAccountManager({ app, safeStorage, shell, utilityProcess }) {
       last = r;
       if (r.code !== 'steam_init_failed' && r.code !== 'steam_wrong_app') return r; // real error (server, ticket, ...)
     }
-    if (!(await isSteamProcessRunning())) {
+    if (!(await isSteamRunning())) {
       return { ok: false, code: 'steam_not_running', message: 'Steam is not running. Start Steam, sign in, and try again.' };
     }
     return { ok: false, code: 'steam_not_owned', message: NOT_OWNED_MESSAGE, detail: last && last.message };
@@ -361,19 +377,23 @@ function createAccountManager({ app, safeStorage, shell, utilityProcess }) {
     if (linkAbort) linkAbort.abort();
   }
 
-  /** App id Play should launch: what Steam last proved this account owns (full game or demo). */
+  /**
+   * What Play should launch: what Steam last proved this account owns (full game or demo).
+   * Returns { appId, code }. appId null means don't open steam://run (code says why, see launchDecisionFromProbe).
+   */
   async function resolveLaunchApp(sess, status) {
     const fromStatus = status && Number(status.steamApp);
     const a = (sess && Number(sess.appid)) || (cfg.STEAM_APP_IDS.includes(fromStatus) ? fromStatus : null) || knownApp();
-    if (a) return a;
+    if (a) return { appId: a, code: null };
     const p = await tryApps('probe'); // first Play ever on this PC: ask Steam which one is owned
-    return p.ok ? p.appid : cfg.STEAM_APP_ID;
+    return launchDecisionFromProbe(p);
   }
 
   /**
    * Called before Play. Best effort, bounded by PLAY_REFRESH_TIMEOUT_MS; never blocks launching.
    * Only fetches a Steam session if this player has linked before (token file or session exists).
    * Returns the entitlement status plus launchAppId (1751950, or 1865070 for demo-only accounts).
+   * launchAppId is null with launchCode 'not_owned' / 'steam_not_running' when Play should not open Steam.
    * resolveApp:false skips working out launchAppId (exe launch mode: the install folder decides what runs).
    */
   async function refreshBeforePlay({ resolveApp = true } = {}) {
@@ -399,9 +419,9 @@ function createAccountManager({ app, safeStorage, shell, utilityProcess }) {
       const cached = readEntitlementFile();
       if (cached) status = { ...statusFromToken(cached, 'cache'), refreshError: status.reason };
     }
-    if (!resolveApp) return { ...status, launchAppId: null };
-    const launchAppId = await resolveLaunchApp(sess, status);
-    return { ...status, launchAppId };
+    if (!resolveApp) return { ...status, launchAppId: null, launchCode: null };
+    const d = await resolveLaunchApp(sess, status);
+    return { ...status, launchAppId: d.appId, launchCode: d.code };
   }
 
   /**
@@ -442,4 +462,5 @@ module.exports = {
   verifyEntitlementToken,
   tierFromPayload,
   entitlementFilePath,
+  launchDecisionFromProbe,
 };

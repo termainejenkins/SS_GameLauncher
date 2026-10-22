@@ -191,16 +191,28 @@ ipcMain.handle('launcher:play', async (_event, arg) => {
   if (app.isPackaged && launch.launchedBySteam()) {
     return { success: false, mode: 'steam', code: 'steam_loop', error: 'This launcher was started by Steam, so it has to start the game directly. Set "launchMode": "exe" in launcher-config.json.', entitlement };
   }
-  // Default to Steam protocol: the full game, or the demo if that's all this account owns.
-  const appId = cfg.STEAM_APP_IDS.includes(Number(entitlement && entitlement.launchAppId)) ? Number(entitlement.launchAppId) : cfg.STEAM_APP_ID;
+  // Steam closed, or this Steam account owns neither app: don't open steam://run (it would point at the unreleased
+  // full game). The renderer explains what to do and offers the demo's store page / opening Steam.
+  const blocked = entitlement && entitlement.launchCode;
+  if (blocked === 'not_owned' || blocked === 'steam_not_running') {
+    const error = blocked === 'not_owned' ? "You don't have THE GREAT CIRCLE on Steam yet." : 'Steam is not running. Start Steam, sign in, then press Play again.';
+    return { success: false, mode: 'steam', code: blocked, error, demoAppId: cfg.STEAM_DEMO_APP_ID, entitlement };
+  }
+  // Steam protocol: the full game, or the demo if that's all this account owns.
+  const appId = cfg.STEAM_APP_IDS.includes(Number(entitlement && entitlement.launchAppId)) ? Number(entitlement.launchAppId) : cfg.DEFAULT_LAUNCH_APP_ID;
   await shell.openExternal(`steam://run/${appId}`);
   return { success: true, entitlement, appId };
 });
 
 ipcMain.handle('launcher:open-external', async (_event, url) => {
-  if (!isAllowedExternal(url)) return false;
-  await shell.openExternal(url);
-  return true;
+  // http(s), plus steam://store/<our app> and steam://open/main for the "no game / Steam closed" prompts.
+  if (!isAllowedExternal(url) && !launch.isAllowedSteamLink(url, cfg.STEAM_APP_IDS)) return false;
+  try {
+    await shell.openExternal(url);
+    return true;
+  } catch (_) {
+    return false; // e.g. no steam:// handler: the renderer falls back to the store website
+  }
 });
 
 // ---------------- Discord account link ----------------

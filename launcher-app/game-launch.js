@@ -128,4 +128,14 @@ function missingGameMessage(resolved) {
     (resolved && resolved.tried && resolved.tried.length ? ` (Looked for: ${resolved.tried.map((p) => path.basename(p)).join(', ')} in ${resolved.root})` : '');
 }
 
-module.exports = { CONFIG_FILE_NAME, DEFAULTS, AFTER_LAUNCH, loadLaunchConfig, resolveGameExe, forwardedArgs, launchedBySteam, startGame, missingGameMessage };
+/**
+ * steam:// links the page may open (launcher:open-external): only the store page of our own apps and
+ * "open Steam". Never steam://run or anything else.
+ */
+function isAllowedSteamLink(url, appIds = []) {
+  const m = /^steam:\/\/(?:store\/(\d+)|open\/main)\/?$/.exec(String(url || ''));
+  if (!m) return false;
+  return m[1] === undefined || appIds.map(Number).includes(Number(m[1]));
+}
+
+module.exports = { isAllowedSteamLink, CONFIG_FILE_NAME, DEFAULTS, AFTER_LAUNCH, loadLaunchConfig, resolveGameExe, forwardedArgs, launchedBySteam, startGame, missingGameMessage };

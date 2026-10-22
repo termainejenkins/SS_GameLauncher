@@ -141,9 +141,56 @@ window.onload = () => {
     }, ms);
   }
 
+  // Play couldn't start the game through Steam: explain why and offer the next step. Built like the consent modal.
+  const STEAM_DEMO_STORE_WEB = 'https://store.steampowered.com/app/1865070/';
+  async function openSteamLink(steamUrl, webUrl) {
+    const ok = await launcher.openExternal(steamUrl).catch(() => false);
+    if (!ok && webUrl) await launcher.openExternal(webUrl).catch(() => false);
+  }
+  function showPlayHelp(code, demoAppId) {
+    const old = document.getElementById('play-help');
+    if (old) old.remove();
+    const notOwned = code === 'not_owned';
+    const demo = Number(demoAppId) || 1865070;
+    const modal = document.createElement('div');
+    modal.className = 'consent-backdrop';
+    modal.id = 'play-help';
+    modal.innerHTML = `
+      <div class="card consent play-help" role="dialog" aria-modal="true" aria-labelledby="play-help-title">
+        <h2 id="play-help-title"></h2>
+        <p id="play-help-text"></p>
+        <div class="row">
+          <button id="play-help-go" class="btn btn-primary"></button>
+          <button id="play-help-close" class="btn">Close</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.getElementById('play-help-title').textContent = notOwned ? "You don't have THE GREAT CIRCLE on Steam yet" : "Steam isn't running";
+    document.getElementById('play-help-text').textContent = notOwned
+      ? 'The free demo is out now. Add it to your Steam library, then press Play again. Already own it? Make sure Steam is signed in to that account.'
+      : 'Start Steam and sign in, then press Play again.';
+    const go = document.getElementById('play-help-go');
+    go.textContent = notOwned ? 'Get the free demo on Steam' : 'Open Steam';
+    const close = () => { document.removeEventListener('keydown', onKey); modal.remove(); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    document.getElementById('play-help-close').onclick = close;
+    go.onclick = async () => {
+      if (notOwned) await openSteamLink(`steam://store/${demo}`, STEAM_DEMO_STORE_WEB);
+      else await openSteamLink('steam://open/main', null);
+      close();
+    };
+    go.focus();
+  }
+
   function handleLaunchResult(result) {
     if (result.success) {
       showToast(result.mode === 'exe' ? 'Starting THE GREAT CIRCLE...' : 'UE4 game launched!');
+    } else if (result.code === 'not_owned' || result.code === 'steam_not_running') {
+      showPlayHelp(result.code, result.demoAppId);
+      sendAnalytics('launch_ue4_game_error', { error: result.code });
     } else if (['game_missing', 'game_exited', 'spawn_failed', 'steam_loop', 'game_running'].includes(result.code)) {
       showToast(result.error, 12000); // launcher-side launch errors are already written for players
       sendAnalytics('launch_ue4_game_error', { error: result.code });

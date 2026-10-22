@@ -10,6 +10,9 @@ module.exports = Object.freeze({
   STEAM_APP_ID: 1751950,
   STEAM_DEMO_APP_ID: 1865070,
   STEAM_APP_IDS: [1751950, 1865070],
+  // Play falls back to this app when the launcher can't tell which one the player owns (Steam helper failed or
+  // timed out). The demo while the full game is unreleased. FLIP to 1751950 (STEAM_APP_ID) at full launch.
+  DEFAULT_LAUNCH_APP_ID: 1865070,
   // Must match STEAM_IDENTITY in SS_AccountServer/wrangler.toml.
   STEAM_IDENTITY: 'SS_AccountServer',
 

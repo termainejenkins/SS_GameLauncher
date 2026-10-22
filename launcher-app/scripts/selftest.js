@@ -247,6 +247,79 @@ const good = { v: 1, steamid: '76561198000000000', discord_id: '1', entitlements
       assert.ok(nd > 0 && na > 0 && nd < na, 'Downloads nav button should come before Discord unlocks');
     });
   }
+  // ---------- Play when the account owns nothing / Steam is closed (account.js + main.js + renderer.js) ----------
+  {
+    const fs = require('fs'); const os = require('os'); const path = require('path'); const { EventEmitter } = require('events');
+    const { launchDecisionFromProbe, createAccountManager } = require('../account');
+    const { isAllowedSteamLink } = require('../game-launch');
+    await t('play decision: owns full game / demo -> that app', () => {
+      assert.deepStrictEqual(launchDecisionFromProbe({ ok: true, appid: 1751950 }), { appId: 1751950, code: null });
+      assert.deepStrictEqual(launchDecisionFromProbe({ ok: true, appid: 1865070 }), { appId: 1865070, code: null });
+    });
+    await t('play decision: owns nothing -> not_owned, no app (never steam://run)', () => {
+      assert.deepStrictEqual(launchDecisionFromProbe({ ok: false, code: 'steam_not_owned' }), { appId: null, code: 'not_owned' });
+    });
+    await t('play decision: Steam not running -> steam_not_running, no app', () => {
+      assert.deepStrictEqual(launchDecisionFromProbe({ ok: false, code: 'steam_not_running' }), { appId: null, code: 'steam_not_running' });
+    });
+    await t('play decision: unknown helper failure -> DEFAULT_LAUNCH_APP_ID (demo while full game is unreleased)', () => {
+      assert.strictEqual(cfg.DEFAULT_LAUNCH_APP_ID, cfg.STEAM_DEMO_APP_ID);
+      for (const code of ['steamworks_missing', 'steam_timeout', 'steam_worker_failed', 'steam_worker_exit', undefined]) {
+        assert.strictEqual(launchDecisionFromProbe({ ok: false, code }).appId, cfg.DEFAULT_LAUNCH_APP_ID, String(code));
+      }
+      assert.strictEqual(launchDecisionFromProbe(null).appId, cfg.DEFAULT_LAUNCH_APP_ID);
+    });
+    // refreshBeforePlay end to end with a fake Steam helper (utilityProcess.fork) and a temp userData / LOCALAPPDATA.
+    const playWith = async (perApp, steamRunning) => {
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ssgl-play-'));
+      const oldLocal = process.env.LOCALAPPDATA; process.env.LOCALAPPDATA = tmp; // no entitlement token -> not linked
+      const asked = [];
+      const utilityProcess = { fork: (_file, args) => {
+        const child = new EventEmitter(); child.kill = () => {}; const appid = Number(args[0]); asked.push(appid);
+        setImmediate(() => { child.emit('message', { appid, ...(perApp[appid] || { ok: false, code: 'steam_init_failed' }) }); child.emit('exit', 0); });
+        return child;
+      } };
+      try {
+        const acct = createAccountManager({ app: { getPath: () => tmp }, safeStorage: { isEncryptionAvailable: () => false }, shell: {}, utilityProcess, isSteamRunning: async () => steamRunning });
+        return { r: await acct.refreshBeforePlay(), asked, remembered: fs.existsSync(path.join(tmp, 'steam_app.json')) };
+      } finally {
+        if (oldLocal === undefined) delete process.env.LOCALAPPDATA; else process.env.LOCALAPPDATA = oldLocal;
+        try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) { /* ignore */ }
+      }
+    };
+    await t('play (fake Steam): owns neither app, Steam running -> launchAppId null, launchCode not_owned', async () => {
+      const { r, asked } = await playWith({}, true);
+      assert.strictEqual(r.launchAppId, null); assert.strictEqual(r.launchCode, 'not_owned'); assert.deepStrictEqual(asked, cfg.STEAM_APP_IDS);
+    });
+    await t('play (fake Steam): Steam closed -> launchAppId null, launchCode steam_not_running', async () => {
+      const { r } = await playWith({}, false);
+      assert.strictEqual(r.launchAppId, null); assert.strictEqual(r.launchCode, 'steam_not_running');
+    });
+    await t('play (fake Steam): demo only -> 1865070 and remembered', async () => {
+      const { r, remembered } = await playWith({ 1865070: { ok: true } }, true);
+      assert.strictEqual(r.launchAppId, 1865070); assert.strictEqual(r.launchCode, null); assert.ok(remembered);
+    });
+    await t('play (fake Steam): helper timeout -> falls back to DEFAULT_LAUNCH_APP_ID', async () => {
+      const { r } = await playWith({ 1751950: { ok: false, code: 'steam_timeout' } }, true);
+      assert.strictEqual(r.launchAppId, cfg.DEFAULT_LAUNCH_APP_ID); assert.strictEqual(r.launchCode, 'steam_timeout');
+    });
+    await t('open-external steam links: only store/<our app> and open/main', () => {
+      assert.ok(isAllowedSteamLink('steam://store/1865070', cfg.STEAM_APP_IDS));
+      assert.ok(isAllowedSteamLink('steam://open/main', cfg.STEAM_APP_IDS));
+      for (const u of ['steam://run/1865070', 'steam://store/480', 'steam://install/1865070', 'steam://store/1865070/../run/1', 'https://store.steampowered.com/app/1865070/', '', null]) {
+        assert.strictEqual(isAllowedSteamLink(u, cfg.STEAM_APP_IDS), false, String(u));
+      }
+    });
+    await t('main/renderer wiring: no full-game fallback, not_owned / steam_not_running handled', () => {
+      const rd = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+      const main = rd('main.js'); const ren = rd('renderer.js');
+      assert.ok(!/:\s*cfg\.STEAM_APP_ID;/.test(main), 'main.js still falls back to cfg.STEAM_APP_ID');
+      assert.ok(main.includes('cfg.DEFAULT_LAUNCH_APP_ID') && main.includes("blocked === 'not_owned' || blocked === 'steam_not_running'"));
+      assert.ok(main.includes('launch.isAllowedSteamLink(url, cfg.STEAM_APP_IDS)'));
+      assert.ok(ren.includes("You don't have THE GREAT CIRCLE on Steam yet") && ren.includes('Get the free demo on Steam'));
+      assert.ok(ren.includes('steam://store/${demo}') && ren.includes('https://store.steampowered.com/app/1865070/') && ren.includes("'steam://open/main'"));
+    });
+  }
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
   process.exit(failed ? 1 : 0);
 })();
