@@ -193,7 +193,8 @@ body.theme-light .copyright-mark.mark-light { display: block; }
 }
 .hero-art {
   position: absolute; inset: 0; z-index: -2;
-  background: #1a120b url("assets/art/tgc-hero.jpg") 72% 38% / cover no-repeat;
+  background: #1a120b url("assets/art/tgc-hero-v9.png") 72% 38% / cover no-repeat;
+  background-image: image-set(url("assets/art/tgc-hero-v9.png") 1x, url("assets/art/tgc-hero-v9_2x.png") 2x);
   filter: sepia(.32) saturate(1.25) contrast(1.06) brightness(.98);
 }
 /* warm the cool in-game dusk toward the launcher's savanna palette */
@@ -245,6 +246,12 @@ body.theme-light .copyright-mark.mark-light { display: block; }
 .btn-play:disabled::before { display: none; }
 .hero .btn:not(.btn-primary) { background: rgba(20, 14, 9, .55); color: #f6ead6; border-color: rgba(255, 230, 190, .18); backdrop-filter: blur(4px); }
 .hero-meta { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+/* Small windows (down to the 980x640 minimum): smaller title, narrower tagline and a left-shifted crop so Juma (v9 hero) stays clear of the text. 1280x800 is unaffected. */
+@media (max-width: 1279px) {
+  .hero-art { background-position: 6% 38%; }
+  .hero-title { font-size: 36px; }
+  .hero-tag { font-size: 14px; max-width: 390px; }
+}
 
 .launch-opts { margin-top: 10px; font-size: 13px; color: #e6d2b0; }
 .launch-opts summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; opacity: .85; transition: opacity .15s; }
