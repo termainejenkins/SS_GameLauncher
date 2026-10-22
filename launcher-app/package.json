@@ -4,14 +4,23 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "selftest": "node scripts/selftest.js",
+    "smoke": "electron scripts/smoke-electron.js",
+    "smoke:steam": "electron scripts/smoke-steam.js",
+    "screenshots": "electron scripts/screenshots.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dist": "electron-builder --win dir --x64",
+    "dist:check": "node scripts/check-dist.js",
+    "dist:installer": "node scripts/build-installer.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Sentient Solutions",
   "license": "ISC",
   "devDependencies": {
     "concurrently": "^9.1.2",
-    "electron": "^36.2.0"
+    "electron": "^36.2.0",
+    "electron-builder": "25.1.8",
+    "rcedit": "4.0.1"
   },
   "dependencies": {
     "ansi-regex": "^5.0.1",
@@ -81,6 +90,7 @@
     "serialize-error": "^7.0.1",
     "shell-quote": "^1.8.2",
     "sprintf-js": "^1.1.3",
+    "steamworks.js": "^0.4.0",
     "string-width": "^4.2.3",
     "strip-ansi": "^6.0.1",
     "sumchecker": "^3.0.1",
@@ -97,5 +107,71 @@
     "yargs-parser": "^21.1.1",
     "yauzl": "^2.10.0"
   },
-  "description": ""
+  "description": "SS Game Launcher for THE GREAT CIRCLE",
+  "build": {
+    "appId": "com.sentientsolutions.tgc.launcher",
+    "productName": "SS Game Launcher",
+    "executableName": "TGC_Launcher",
+    "copyright": "Sentient Solutions",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "electronDist": "node_modules/electron/dist",
+    "npmRebuild": false,
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "account.js",
+      "config.js",
+      "game-launch.js",
+      "steam-ticket-worker.js",
+      "index.html",
+      "styles.css",
+      "assets/**/*",
+      "package.json",
+      "!node_modules/steamworks.js/dist/linux64/**",
+      "!node_modules/steamworks.js/dist/osx/**",
+      "!node_modules/steamworks.js/dist/win64/*.lib"
+    ],
+    "asarUnpack": [
+      "node_modules/steamworks.js/**"
+    ],
+    "extraFiles": [
+      {
+        "from": "build/launcher-config.json",
+        "to": "launcher-config.json"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/brand/ss_appicon_win_multi_v2.ico",
+      "signAndEditExecutable": false
+    },
+    "afterPack": "build/afterPack.js",
+    "electronLanguages": [
+      "en-US"
+    ],
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SS Game Launcher",
+      "uninstallDisplayName": "SS Game Launcher",
+      "artifactName": "SS_GameLauncher-Setup-${version}.${ext}",
+      "installerIcon": "assets/brand/ss_appicon_win_multi_v2.ico",
+      "uninstallerIcon": "assets/brand/ss_appicon_win_multi_v2.ico"
+    }
+  }
 }

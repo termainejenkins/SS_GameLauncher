@@ -1,0 +1,13 @@
+{
+  "launchMode": "steam",
+  "gameRoot": "..",
+  "gameExe": [
+    "TheGreatCircle_4_27.exe",
+    "TheGreatCircle.exe",
+    "TheGreatCircle_4_27/Binaries/Win64/TheGreatCircle_4_27-Win64-Shipping.exe"
+  ],
+  "extraArgs": [],
+  "forwardArgs": true,
+  "afterLaunch": "close-and-wait",
+  "startupCheckMs": 4000
+}

@@ -15,3 +15,20 @@ yarn-error.log*
 
 # Electron
 *.asar 
+
+# Secrets (repo is public)
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+private_key*
+.dev.vars
+
+# Build output anywhere
+dist/
+
+# Local file backups
+*.bak_*
+

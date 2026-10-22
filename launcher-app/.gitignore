@@ -1,0 +1,3 @@
+# Packaged launcher output (npm run dist)
+dist/
+dist-installer/

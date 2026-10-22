@@ -1,0 +1,10 @@
+{
+  "name": "ss_game_launcher_root",
+  "private": true,
+  "scripts": {
+    "start": "concurrently \"npm run dev --prefix backend\" \"npm start --prefix launcher-app\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+} 

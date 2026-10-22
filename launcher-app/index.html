@@ -2,112 +2,222 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=800, initial-scale=1.0">
-  <title>SS Games Launcher</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 40px;
-      background: #23272a;
-      color: #f5f6fa;
-    }
-    button {
-      margin: 10px 0;
-      padding: 10px 20px;
-      font-size: 16px;
-      background: #2c2f33;
-      color: #f5f6fa;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    button:hover {
-      background: #3a3f44;
-    }
-    #news {
-      margin-top: 30px;
-    }
-    .news-item {
-      margin-bottom: 15px;
-      background: #2c2f33;
-      padding: 12px 16px;
-      border-radius: 4px;
-    }
-    #update {
-      background: #2c2f33 !important;
-      border-left: 4px solid #7289da !important;
-      color: #f5f6fa;
-    }
-    #update h2 {
-      color: #7289da;
-    }
-    #toast {
-      background: #111417 !important;
-      color: #f5f6fa !important;
-    }
-    a {
-      color: #7289da;
-    }
-    footer {
-      color: #888;
-    }
-  </style>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' http://localhost:3000; frame-src http: https:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SS Game Launcher</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div style="position:absolute; top:20px; right:40px;">
-    <label style="cursor:pointer;">
-      <input type="checkbox" id="theme-toggle" style="vertical-align:middle;"> <span id="theme-label">Dark Mode</span>
-    </label>
-  </div>
-  <div style="position:absolute; top:60px; right:40px;">
-    <label style="cursor:pointer;">
-      <input type="checkbox" id="analytics-toggle" style="vertical-align:middle;"> <span id="analytics-label">Enable Analytics</span>
-    </label>
-  </div>
-  <h1>SS Games Launcher</h1>
-  <div>
-    <label><input type="radio" name="launch-method" value="steam" checked> Launch via Steam</label>
-    <label><input type="radio" name="launch-method" value="url"> Launch via URL</label>
-    <input type="text" id="custom-url" placeholder="Enter game URL" style="width:300px;" disabled>
-  </div>
-  <div id="game-buttons" style="display:flex; gap:16px; flex-wrap:wrap; margin: 24px 0;">
-    <button id="play-ue4">THE GREAT CIRCLE</button>
-    <button id="download-ue4" style="background:#7289da; color:#fff;">Download</button>
-    <button id="play-web">The Great Circle Web</button>
-    <button id="play-before">THE GREAT BEFORE</button>
-    <button id="play-pacific">THE GREAT PACIFIC</button>
-  </div>
-  <div id="download-progress-container" style="display:none; margin-top:10px; width:100%; max-width:400px;">
-    <div style="background:#444; border-radius:4px; overflow:hidden; height:18px;">
-      <div id="download-progress" style="background:#7289da; width:0%; height:18px; transition:width 0.2s;"></div>
+<div class="app">
+
+  <!-- ================= SIDEBAR ================= -->
+  <aside class="sidebar">
+    <!-- Publisher slot: swap assets/brand/publisher-logo.svg (+ publisher-logo-light.svg for light mode)
+         to rebrand. Static on purpose: the sandboxed renderer can't read config.js. -->
+    <div class="brand publisher">
+      <img class="publisher-logo" src="assets/brand/publisher-logo.svg" alt="Sentient Solutions" width="188" height="31">
+      <div class="publisher-caption">Game Launcher</div>
     </div>
-    <div id="download-status" style="margin-top:4px; font-size:14px; color:#aaa;"></div>
-  </div>
-  <div id="update" style="margin-bottom:30px; display:none; background:#f5f5f5; border-left:4px solid #0078d7; padding:16px 24px; border-radius:6px;">
-    <h2 style="margin-top:0;">Latest Update</h2>
-    <div id="update-content">Loading update info...</div>
-  </div>
-  <div id="news">
-    <h2>News</h2>
-    <div id="news-list">Loading news...</div>
-  </div>
-  <div id="toast" style="display:none; position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:16px 32px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.2); font-size:16px; z-index:1000; transition:opacity 0.3s; opacity:0;"></div>
-  <div id="error-report" style="margin-top:40px; background:#2c2f33; padding:20px; border-radius:8px; max-width:500px;">
-    <h3 style="margin-top:0;">Report a Bug</h3>
-    <textarea id="error-message" rows="3" style="width:100%; border-radius:4px; border:none; padding:8px; resize:vertical; background:#23272a; color:#f5f6fa;"></textarea>
-    <button id="submit-error" style="margin-top:10px;">Submit Report</button>
-  </div>
-  <div id="webgame-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(30,32,34,0.98); z-index:2000; align-items:center; justify-content:center;">
-    <div style="position:relative; width:90vw; height:90vh; max-width:1200px; max-height:800px; background:#181a1b; border-radius:10px; box-shadow:0 4px 32px rgba(0,0,0,0.5); display:flex; flex-direction:column;">
-      <button id="close-webgame" style="position:absolute; top:16px; right:24px; z-index:10; background:#2c2f33; color:#f5f6fa; border:none; border-radius:4px; padding:6px 16px; font-size:18px; cursor:pointer;">Close</button>
-      <iframe id="webgame-frame" src="https://example.com/webgame" style="flex:1; width:100%; height:100%; border:none; border-radius:0 0 10px 10px; background:#23272a;"></iframe>
+
+    <nav class="nav">
+      <button class="active" data-scroll="top">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Library
+      </button>
+      <button data-scroll="account">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+        Discord unlocks
+      </button>
+      <button data-scroll="news">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>
+        News
+      </button>
+      <button data-scroll="downloads">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16"/></svg>
+        Downloads
+      </button>
+      <button data-scroll="error-report">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>
+        Support
+      </button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <label class="switch">
+        <input type="checkbox" id="theme-toggle"><span class="track"></span><span id="theme-label">Dark Mode</span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="analytics-toggle"><span class="track"></span><span id="analytics-label">Enable Analytics</span>
+      </label>
+      <div class="copyright"><img class="copyright-mark mark-dark" src="assets/brand/ss_symbol_mono_footer_offwhite_14x14_v2.png" srcset="assets/brand/ss_symbol_mono_footer_offwhite_14x14_v2.png 1x, assets/brand/ss_symbol_mono_footer_offwhite_28x28_v1.png 2x, assets/brand/ss_symbol_mono_footer_offwhite_42x42_v1.png 3x" alt="" width="14" height="14"><img class="copyright-mark mark-light" src="assets/brand/ss_symbol_mono_footer_charcoal_14x14_v2.png" srcset="assets/brand/ss_symbol_mono_footer_charcoal_14x14_v2.png 1x, assets/brand/ss_symbol_mono_footer_charcoal_28x28_v1.png 2x, assets/brand/ss_symbol_mono_footer_charcoal_42x42_v1.png 3x" alt="" width="14" height="14"><span>&copy; 2025 Sentient Solutions LLC.<br>All rights reserved.</span></div>
     </div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <main class="main" id="main">
+    <span id="top"></span>
+
+    <!-- Hero: in-game key art (assets/art/tgc-hero.jpg) -->
+    <section class="hero">
+      <div class="hero-art" aria-hidden="true"></div>
+
+      <div class="hero-body">
+        <h1 class="hero-title"><span class="w">The</span> <span class="w w-link">Great</span> <span class="w w-link">Circle</span></h1>
+        <p class="hero-tag">Survive the African wild. Play through Steam, link Discord once, and your supporter unlocks follow you into the game.</p>
+        <div class="hero-actions">
+          <button id="play-ue4" class="btn btn-primary btn-play">PLAY</button>
+          <button id="download-ue4" class="btn">Download</button>
+        </div>
+        <div class="hero-meta">
+          <span class="badge badge-on-hero">Steam</span>
+          <span class="badge badge-on-hero">Early Access</span>
+          <span class="badge badge-on-hero">Unreal Engine</span>
+        </div>
+        <details class="launch-opts">
+          <summary>Launch options</summary>
+          <div class="launch-row">
+            <label><input type="radio" name="launch-method" value="steam" checked> Launch via Steam</label>
+            <label><input type="radio" name="launch-method" value="url"> Launch via URL</label>
+            <input type="text" id="custom-url" class="input" placeholder="Enter game URL" disabled>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <div class="columns">
+      <!-- ---------- left column ---------- -->
+      <div class="col">
+        <section>
+          <div class="section-title"><h2>Library</h2><span class="muted">4 titles</span></div>
+          <div id="game-buttons" class="games">
+            <article class="game">
+              <div class="game-art game-art-cover">
+                <img src="assets/art/tgc-cover-card.png" alt="The Great Circle cover art" draggable="false">
+                <span class="badge badge-live">Early Access</span>
+              </div>
+              <div class="game-body">
+                <div class="game-title">The Great Circle</div>
+                <div class="game-sub">African wilderness</div>
+                <button class="btn btn-primary btn-sm" data-action="play-tgc">Play</button>
+              </div>
+            </article>
+
+            <article class="game">
+              <div class="game-art">
+                <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                  <defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b1f0d"/><stop offset=".55" stop-color="#b8601f"/><stop offset="1" stop-color="#f2b84b"/></linearGradient></defs>
+                  <rect width="160" height="100" fill="url(#g2)"/>
+                  <circle cx="80" cy="50" r="30" fill="none" stroke="#ffe2a8" stroke-width="2"/>
+                  <ellipse cx="80" cy="50" rx="13" ry="30" fill="none" stroke="#ffe2a8" stroke-width="1.4"/>
+                  <path d="M50 50h60M54 36h52M54 64h52" stroke="#ffe2a8" stroke-width="1.2"/>
+                </svg>
+                <span class="badge badge-live">Browser</span>
+              </div>
+              <div class="game-body">
+                <div class="game-title">TheGreatCircle Web</div>
+                <div class="game-sub">Play in the launcher</div>
+                <button id="play-web" class="btn btn-sm">Open</button>
+              </div>
+            </article>
+
+            <article class="game soon">
+              <div class="game-art">
+                <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                  <defs><linearGradient id="g3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d2230"/><stop offset=".6" stop-color="#1f5a6b"/><stop offset="1" stop-color="#e8a24b"/></linearGradient></defs>
+                  <rect width="160" height="100" fill="url(#g3)"/><circle cx="118" cy="30" r="10" fill="#f8e3b0"/>
+                  <path d="M0 70 q20-8 40 0 t40 0 t40 0 t40 0 V100 H0Z" fill="#103140"/>
+                  <path d="M0 82 q20-6 40 0 t40 0 t40 0 t40 0 V100 H0Z" fill="#0a1f29"/>
+                </svg>
+                <span class="badge badge-soon">Coming soon</span>
+              </div>
+              <div class="game-body">
+                <div class="game-title">The Great Pacific</div>
+                <div class="game-sub">Open ocean</div>
+                <button id="play-pacific" class="btn btn-sm" disabled>Coming soon</button>
+              </div>
+            </article>
+
+            <article class="game soon">
+              <div class="game-art">
+                <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                  <defs><linearGradient id="g4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#140d1c"/><stop offset=".7" stop-color="#4a2a3a"/><stop offset="1" stop-color="#a5552a"/></linearGradient></defs>
+                  <rect width="160" height="100" fill="url(#g4)"/>
+                  <g fill="#f6e3c0" opacity=".8"><circle cx="20" cy="14" r="1"/><circle cx="50" cy="26" r="1.2"/><circle cx="96" cy="12" r="1"/><circle cx="132" cy="24" r=".9"/><circle cx="70" cy="8" r=".8"/></g>
+                  <path d="M0 80 L30 46 L52 66 L82 30 L112 64 L134 48 L160 72 V100 H0Z" fill="#1f1218"/>
+                  <path d="M66 100V74h8v26M86 100V70h8v30" fill="#2e1b20"/>
+                </svg>
+                <span class="badge badge-soon">Coming soon</span>
+              </div>
+              <div class="game-body">
+                <div class="game-title">The Great Before</div>
+                <div class="game-sub">Ancient origins</div>
+                <button id="play-before" class="btn btn-sm" disabled>Coming soon</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="news">
+          <div class="section-title"><h2>News</h2></div>
+          <div id="news-list" class="muted">Loading news...</div>
+        </section>
+
+        <section id="error-report" class="card">
+          <h3>Report a bug</h3>
+          <div class="muted" style="font-size:13px; margin-top:4px;">Tell us what happened. Include what you were doing and what you expected.</div>
+          <textarea id="error-message" class="input" rows="3" placeholder="Describe the problem..."></textarea>
+          <button id="submit-error" class="btn btn-primary btn-sm">Submit report</button>
+        </section>
+      </div>
+
+      <!-- ---------- right column ---------- -->
+      <div class="col">
+        <section id="account" class="card discord">
+          <div class="discord-head">
+            <h3>Discord unlocks</h3>
+            <span id="account-state" class="state-pill">Not linked</span>
+          </div>
+          <div class="profile">
+            <div id="account-avatar" class="avatar off">?</div>
+            <div>
+              <div id="account-status" class="profile-name">Checking Discord link...</div>
+              <div class="profile-sub"><span id="account-game-badge" class="badge" style="display:none;"></span></div>
+            </div>
+          </div>
+          <div id="account-detail"></div>
+          <ul id="account-entitlements"></ul>
+          <div class="discord-actions">
+            <button id="link-discord" class="btn btn-discord">Link Discord</button>
+            <button id="link-done" class="btn btn-ghost" style="display:none;">I'm done</button>
+          </div>
+        </section>
+
+        <section id="downloads" class="card dl-card">
+          <div class="section-title" style="margin-bottom:6px;"><h3>Downloads &amp; updates</h3></div>
+          <div id="download-progress-container" style="display:none;">
+            <div class="progress"><div id="download-progress"></div></div>
+            <div id="download-status"></div>
+          </div>
+          <div id="update" style="display:none;">
+            <h2>Latest update</h2>
+            <div id="update-content">Loading update info...</div>
+          </div>
+          <div class="idle">Everything is up to date</div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast" style="display:none; opacity:0;"></div>
+
+<div id="webgame-modal" style="display:none;">
+  <div class="modal-frame">
+    <button id="close-webgame" class="btn btn-sm">Close</button>
+    <iframe id="webgame-frame" src="about:blank"></iframe>
   </div>
-  <footer style="margin-top:40px; text-align:center; color:#888; font-size:14px;">
-    &copy; 2025 SENTIENT SOLUTIONS LLC. All rights reserved.
-  </footer>
-  <script src="renderer.js"></script>
+</div>
+
+<script src="renderer.js"></script>
 </body>
-</html> 
+</html>
