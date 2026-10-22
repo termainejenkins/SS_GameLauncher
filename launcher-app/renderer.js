@@ -85,9 +85,9 @@ window.onload = () => {
   });
   launcher.getUpdateStatus().then(renderUpdate).catch(() => { updateDiv.style.display = 'none'; });
 
-  // Launcher version label in the sidebar, e.g. "SS Game Launcher v1.1.1".
+  // Launcher version line under the sidebar brand, e.g. "v1.1.1".
   const versionLabel = document.getElementById('launcher-version');
-  if (versionLabel) launcher.getVersion().then((v) => { if (v) versionLabel.textContent = `SS Game Launcher v${v}`; }).catch(() => {});
+  if (versionLabel) launcher.getVersion().then((v) => { if (v) { versionLabel.textContent = `v${v}`; versionLabel.title = `SS Game Launcher v${v}`; } }).catch(() => {});
 
   // Launch method radio buttons and URL input
   const steamRadio = document.querySelector('input[name="launch-method"][value="steam"]');

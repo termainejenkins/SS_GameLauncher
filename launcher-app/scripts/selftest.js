@@ -234,7 +234,17 @@ const good = { v: 1, steamid: '76561198000000000', discord_id: '1', entitlements
       const fs = require('fs'); const path = require('path'); const rd = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
       assert.ok(rd('index.html').includes('id="launcher-version"'));
       assert.ok(/getVersion:\s*\(\)\s*=>\s*ipcRenderer\.invoke\('updater:status'\)/.test(rd('preload.js')));
-      assert.ok(rd('renderer.js').includes('SS Game Launcher v${v}'));
+      assert.ok(rd('renderer.js').includes('versionLabel.textContent = `v${v}`'));
+    });
+    await t('ui: version line sits under the sidebar brand; Downloads & updates sits above Discord unlocks', () => {
+      const fs = require('fs'); const path = require('path'); const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+      const brand = html.slice(html.indexOf('<div class="brand publisher">'), html.indexOf('<nav class="nav">'));
+      assert.ok(brand.includes('id="launcher-version"'), 'version line not in brand block');
+      assert.strictEqual(html.split('id="launcher-version"').length, 2, 'version label should appear once');
+      const dl = html.indexOf('<section id="downloads"'), acc = html.indexOf('<section id="account"');
+      assert.ok(dl > 0 && acc > 0 && dl < acc, 'downloads should come before account');
+      const nd = html.indexOf('data-scroll="downloads"'), na = html.indexOf('data-scroll="account"');
+      assert.ok(nd > 0 && na > 0 && nd < na, 'Downloads nav button should come before Discord unlocks');
     });
   }
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED');

@@ -104,6 +104,9 @@ body.theme-light .publisher-logo { content: url('assets/brand/publisher-logo-lig
 /* indent = where the wordmark starts in the horizontal lockup (540 / 3051 of its width) */
 .publisher-caption { --indent: 17.7%; margin: 6px 0 0 var(--indent); font-size: 8.5px; font-weight: 600; letter-spacing: 3.1px; text-transform: uppercase; color: rgba(247, 245, 240, .5); }
 body.theme-light .publisher-caption { color: rgba(40, 40, 40, .55); }
+/* launcher version, small muted line under the caption, same indent as the caption */
+.launcher-version { margin: 4px 0 0 17.7%; font-size: 11px; line-height: 1.2; letter-spacing: .4px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.launcher-version:empty { display: none; }
 
 .nav { display: flex; flex-direction: column; gap: 3px; }
 .nav button {
