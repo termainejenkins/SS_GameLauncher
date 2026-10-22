@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, session, utilityProcess } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, session, utilityProcess, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -189,6 +189,31 @@ ipcMain.handle('account:cancel-link', () => {
   account.cancelLink();
   return true;
 });
+
+// ---------------- Steam test-branch passwords ----------------
+// Held in memory only for the copy button; never written to disk or logged. Cleared on every fetch and on quit.
+let branchPasswords = new Map(); // branch name -> password
+const COPY_CLEAR_MS = 60 * 1000; // clear the clipboard after this long, only if it still holds that password (0 = never)
+
+ipcMain.handle('account:branches', async () => {
+  branchPasswords = new Map();
+  const r = await account.fetchBranches();
+  for (const b of r.branches || []) branchPasswords.set(b.branch, b.password);
+  return r;
+});
+
+// Called only from the Copy button's click handler in the renderer.
+ipcMain.handle('account:copy-branch-password', (_event, branch) => {
+  const pw = branchPasswords.get(String(branch));
+  if (!pw) return false;
+  clipboard.writeText(pw);
+  if (COPY_CLEAR_MS > 0) {
+    setTimeout(() => { try { if (clipboard.readText() === pw) clipboard.clear(); } catch (_) { /* ignore */ } }, COPY_CLEAR_MS).unref?.();
+  }
+  return true;
+});
+
+app.on('before-quit', () => { branchPasswords = new Map(); });
 
 // ---------------- download / installer ----------------
 

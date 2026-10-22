@@ -186,6 +186,7 @@ window.onload = () => {
 
   function renderAccount(st) {
     if (!st) return;
+    loadBranches(st); // test-branch passwords, only when linked
     accountEnts.textContent = '';
     gameBadge.style.display = 'none';
     gameBadge.className = 'badge';
@@ -266,6 +267,106 @@ window.onload = () => {
     }
   };
   linkDoneBtn.onclick = () => launcher.cancelLink();
+
+  // ---------------- Steam test branches ----------------
+  // Passwords stay in this closure and the main process's memory. They are never put in localStorage,
+  // analytics, toasts or the console, and the DOM only shows one while its Show toggle is on.
+  const branchesCard = document.getElementById('branches');
+  const branchesList = document.getElementById('branches-list');
+  const branchesEmpty = document.getElementById('branches-empty');
+  const branchesRefresh = document.getElementById('branches-refresh');
+  const REVEAL_MS = 30 * 1000; // a revealed code hides itself again after this long
+  const BRANCH_REASON = {
+    no_session: 'Press Relink Discord to load your test branches.',
+    session_expired: 'Your sign-in expired. Press Relink Discord to load your test branches.',
+    not_linked: '',
+    server_unreachable: 'Could not reach the account server. Try Refresh.',
+  };
+  let branchesBusy = false;
+
+  function clearBranches() {
+    branchesList.textContent = '';
+    branchesEmpty.hidden = true;
+  }
+
+  function branchRow(b) {
+    const li = document.createElement('li');
+    li.className = 'branch-row';
+    const name = document.createElement('div');
+    name.className = 'branch-name';
+    name.textContent = b.branch;
+    const actions = document.createElement('div');
+    actions.className = 'branch-actions';
+    const code = document.createElement('span');
+    code.className = 'branch-code masked';
+    code.textContent = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+    const reveal = document.createElement('button');
+    reveal.type = 'button';
+    reveal.className = 'btn btn-sm btn-ghost';
+    reveal.textContent = 'Show';
+    reveal.setAttribute('aria-pressed', 'false');
+    let hideTimer = null;
+    const hide = () => {
+      clearTimeout(hideTimer);
+      code.textContent = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+      code.classList.add('masked');
+      reveal.textContent = 'Show';
+      reveal.setAttribute('aria-pressed', 'false');
+    };
+    reveal.onclick = () => {
+      if (code.classList.contains('masked')) {
+        code.textContent = b.password;
+        code.classList.remove('masked');
+        reveal.textContent = 'Hide';
+        reveal.setAttribute('aria-pressed', 'true');
+        hideTimer = setTimeout(hide, REVEAL_MS);
+      } else hide();
+    };
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'btn btn-sm';
+    copy.textContent = 'Copy';
+    copy.onclick = async () => { // the ONLY path that writes the clipboard: an explicit click
+      const ok = await launcher.copyBranchPassword(b.branch).catch(() => false);
+      showToast(ok ? `Code for ${b.branch} copied. Paste it in Steam > Betas.` : 'Could not copy. Try Refresh.');
+    };
+    actions.append(code, reveal, copy);
+    li.append(name, actions);
+    if (b.label) {
+      const label = document.createElement('div');
+      label.className = 'branch-label';
+      label.textContent = b.label;
+      li.appendChild(label);
+    }
+    return li;
+  }
+
+  async function loadBranches(st) {
+    if (!st || !st.linked) { clearBranches(); branchesCard.hidden = true; return; }
+    if (branchesBusy) return;
+    branchesBusy = true;
+    try {
+      const r = await launcher.getBranches();
+      clearBranches();
+      if (r && r.ok && r.branches.length) {
+        r.branches.forEach((b) => branchesList.appendChild(branchRow(b)));
+        branchesCard.hidden = false;
+      } else if (r && r.ok) {
+        branchesCard.hidden = true; // linked, but no tier that grants a test branch
+      } else {
+        const msg = BRANCH_REASON[r && r.reason];
+        branchesCard.hidden = !msg;
+        if (msg) { branchesEmpty.textContent = msg; branchesEmpty.hidden = false; }
+      }
+    } catch (_) {
+      clearBranches();
+      branchesCard.hidden = true;
+    } finally {
+      branchesBusy = false;
+    }
+  }
+
+  branchesRefresh.onclick = () => launcher.getLinkStatus().then(renderAccount).catch(() => {});
 
   accountStatus.textContent = 'Checking Discord link...';
   launcher.getLinkStatus().then(renderAccount).catch(() => {

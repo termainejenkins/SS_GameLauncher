@@ -19,6 +19,10 @@ contextBridge.exposeInMainWorld('launcher', {
   cancelLink: () => ipcRenderer.invoke('account:cancel-link'),
   onLinkProgress: (cb) => on('account:progress', cb),
 
+  // Steam test branches (passwords for branches your Discord tier grants)
+  getBranches: () => ipcRenderer.invoke('account:branches'),
+  copyBranchPassword: (branch) => ipcRenderer.invoke('account:copy-branch-password', String(branch)),
+
   // Download / installer
   chooseDownloadLocation: () => ipcRenderer.invoke('download:choose-location'),
   startDownload: (filePath) => ipcRenderer.send('download:start', String(filePath)),

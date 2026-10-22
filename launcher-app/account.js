@@ -404,7 +404,37 @@ function createAccountManager({ app, safeStorage, shell, utilityProcess }) {
     return { ...status, launchAppId };
   }
 
-  return { getStatus, linkDiscord, cancelLink, refreshBeforePlay, waitForSteamWorkers };
+  /**
+   * Steam beta branch passwords this player's Discord tier grants (GET /branches).
+   * Uses the stored session only; never starts Steam and never links. Passwords are returned to the
+   * caller and NOT written to disk, the session file, the token file, or any log.
+   */
+  async function fetchBranches() {
+    const sess = loadSession();
+    if (!sess) return { ok: false, reason: 'no_session', branches: [] };
+    let res;
+    try {
+      res = await fetch(`${cfg.ACCOUNT_SERVER_URL}/branches`, {
+        headers: { authorization: `Bearer ${sess.session}` },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(10000),
+      });
+    } catch (_) {
+      return { ok: false, reason: 'server_unreachable', branches: [] };
+    }
+    if (res.status === 401) { clearSession(); return { ok: false, reason: 'session_expired', branches: [] }; }
+    if (res.status === 404) return { ok: false, reason: 'not_linked', branches: [] };
+    if (res.status !== 200) return { ok: false, reason: `http_${res.status}`, branches: [] };
+    const body = await res.json().catch(() => null);
+    const list = body && Array.isArray(body.branches) ? body.branches : [];
+    const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+    const branches = list
+      .map((b) => ({ branch: str(b && b.branch, 64), label: str(b && b.label, 80), password: str(b && b.password, 128) }))
+      .filter((b) => b.branch && b.password);
+    return { ok: true, tier: Number(body && body.tier) || 0, tierName: str(body && body.tier_name, 16), branches };
+  }
+
+  return { getStatus, linkDiscord, cancelLink, refreshBeforePlay, waitForSteamWorkers, fetchBranches };
 }
 
 module.exports = {

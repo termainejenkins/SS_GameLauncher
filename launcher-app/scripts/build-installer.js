@@ -16,6 +16,20 @@ const config = {
   win: { ...pkg.build.win, target: [{ target: 'nsis', arch: ['x64'] }] },
 };
 
-build({ projectDir: path.resolve(__dirname, '..'), targets: Platform.WINDOWS.createTarget('nsis', Arch.x64), config })
+// electron-builder MERGES this extraFiles with package.json's (both write launcher-config.json), and which copy
+// wins is not guaranteed. So overwrite it after packing (before NSIS zips it) and assert the result.
+const fs = require('fs');
+const projectDir = path.resolve(__dirname, '..');
+const webConfig = path.join(projectDir, 'build', 'launcher-config.web.json');
+const baseAfterPack = require('../build/afterPack.js').default;
+config.afterPack = async (context) => {
+  await baseAfterPack(context);
+  fs.copyFileSync(webConfig, path.join(context.appOutDir, 'launcher-config.json'));
+  const mode = JSON.parse(fs.readFileSync(path.join(context.appOutDir, 'launcher-config.json'), 'utf8')).launchMode;
+  if (mode !== 'steam') throw new Error('installer launcher-config.json launchMode is ' + mode + ', expected steam');
+  console.log('  installer: launcher-config.json = launcher-config.web.json (launchMode steam)');
+};
+
+build({ projectDir, targets: Platform.WINDOWS.createTarget('nsis', Arch.x64), config })
   .then((files) => { console.log('Built:'); for (const f of files) console.log('  ' + f); })
   .catch((e) => { console.error(e); process.exit(1); });
