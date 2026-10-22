@@ -20,14 +20,6 @@ function renderNewsContent(container, html) {
   });
 }
 
-function labelled(parent, label, value) {
-  const strong = document.createElement('strong');
-  strong.textContent = label + ' ';
-  parent.appendChild(strong);
-  parent.appendChild(document.createTextNode(String(value ?? '')));
-  parent.appendChild(document.createElement('br'));
-}
-
 window.onload = () => {
   // Fetch news from backend
   fetch(`${BACKEND_URL}/news`)
@@ -50,39 +42,48 @@ window.onload = () => {
       document.getElementById('news-list').innerText = 'Failed to load news.';
     });
 
-  // Simulated local game version
-  const localGameVersion = '1.0.0';
-
-  // Fetch latest update info from backend
-  fetch(`${BACKEND_URL}/updates`)
-    .then(res => res.json())
-    .then(update => {
-      const updateDiv = document.getElementById('update');
-      const updateContent = document.getElementById('update-content');
-      if (update && update.version) {
-        updateDiv.style.display = 'block';
-        updateContent.textContent = '';
-        labelled(updateContent, 'Version:', update.version);
-        labelled(updateContent, 'Date:', update.date);
-        labelled(updateContent, 'Notes:', update.notes);
-        if (update.downloadUrl && /^https?:\/\//i.test(update.downloadUrl)) {
-          const a = document.createElement('a');
-          a.href = update.downloadUrl;
-          a.textContent = 'Download Update';
-          a.onclick = (e) => { e.preventDefault(); launcher.openExternal(update.downloadUrl); };
-          updateContent.appendChild(a);
-        }
-        // Version comparison and update prompt
-        if (update.version !== localGameVersion) {
-          showToast(`A new game update (v${update.version}) is available!`);
-        }
-      } else {
-        updateDiv.style.display = 'none';
-      }
-    })
-    .catch(() => {
-      document.getElementById('update').style.display = 'none';
-    });
+  // Launcher self-update status (main process / electron-updater). The old localhost /updates panel is gone:
+  // it compared a hardcoded game version against a dev-only server. The Steam copy shows nothing here.
+  const updateDiv = document.getElementById('update');
+  const updateContent = document.getElementById('update-content');
+  const updateIdle = document.querySelector('#downloads .idle');
+  function renderUpdate(st) {
+    if (!st || st.state === 'disabled') { updateDiv.style.display = 'none'; return; }
+    updateContent.textContent = '';
+    let text = '';
+    if (st.state === 'downloading') text = `Downloading launcher update${st.version ? ' v' + st.version : ''}... ${st.percent || 0}%`;
+    else if (st.state === 'ready') text = `SS Game Launcher v${st.version} is ready to install.`;
+    else if (st.state === 'checking') text = 'Checking for launcher updates...';
+    else if (st.state === 'up_to_date') text = `SS Game Launcher v${st.current} is up to date.`;
+    else if (st.state === 'error') text = `SS Game Launcher v${st.current}. Could not check for updates right now.`;
+    else text = `SS Game Launcher v${st.current}`;
+    updateContent.appendChild(document.createTextNode(text));
+    if (st.state === 'ready') {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-sm';
+      btn.style.marginLeft = '8px';
+      btn.textContent = 'Restart and update';
+      btn.onclick = async () => {
+        const r = await launcher.installUpdate().catch(() => ({ ok: false }));
+        if (!r || !r.ok) showToast(r && r.reason === 'game_running' ? 'Close the game first, then update.' : 'Update will install next time you close the launcher.');
+      };
+      updateContent.appendChild(btn);
+      const later = document.createElement('div');
+      later.className = 'muted';
+      later.textContent = 'Or keep playing: it installs automatically when you close the launcher.';
+      updateContent.appendChild(later);
+    }
+    updateDiv.style.display = 'block';
+    if (updateIdle) updateIdle.style.display = st.state === 'ready' || st.state === 'downloading' ? 'none' : '';
+  }
+  let lastUpdateState = '';
+  launcher.onUpdateStatus((st) => {
+    renderUpdate(st);
+    if (st && st.state === 'ready' && lastUpdateState !== 'ready') showToast(`Launcher update v${st.version} downloaded. Restart to install.`, 6000);
+    lastUpdateState = st ? st.state : '';
+  });
+  launcher.getUpdateStatus().then(renderUpdate).catch(() => { updateDiv.style.display = 'none'; });
 
   // Launch method radio buttons and URL input
   const steamRadio = document.querySelector('input[name="launch-method"][value="steam"]');

@@ -19,6 +19,15 @@ for (const f of mustNot) { const there = fs.existsSync(path.join(root, f)); if (
 let bytes = 0; let files = 0;
 (function walk(d) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else { files++; bytes += fs.statSync(p).size; } } })(root);
 try { JSON.parse(fs.readFileSync(path.join(root, 'launcher-config.json'), 'utf8')); console.log('OK      launcher-config.json is valid JSON'); } catch (e) { bad++; console.log('BAD     launcher-config.json', e.message); }
+// The Steam depot copy must never self-update (Steam owns these files).
+try {
+  const { updatePolicy } = require('../updater');
+  const { loadLaunchConfig } = require('../game-launch');
+  const lc = loadLaunchConfig(root);
+  const pol = updatePolicy({ isPackaged: true, launchCfg: lc, execPath: path.join(root, 'TGC_Launcher.exe'), resourcesPath: path.join(root, 'resources'), launchedBySteam: false });
+  if (lc.config.launchMode !== 'exe') { bad++; console.log('BAD     launcher-config.json launchMode is', lc.config.launchMode, '(Steam build needs exe)'); } else console.log('OK      launchMode exe (Steam layout)');
+  if (pol.enabled) { bad++; console.log('BAD     self-update would be ON for the Steam build'); } else console.log(`OK      self-update off for the Steam build (${pol.reason})`);
+} catch (e) { bad++; console.log('BAD     update policy check', e.message); }
 console.log(`${files} files, ${(bytes / 1048576).toFixed(1)} MB in ${root}`);
 console.log(bad ? `${bad} PROBLEM(S)` : 'DIST OK');
 process.exit(bad ? 1 : 0);

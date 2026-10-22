@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld('launcher', {
   getBranches: () => ipcRenderer.invoke('account:branches'),
   copyBranchPassword: (branch) => ipcRenderer.invoke('account:copy-branch-password', String(branch)),
 
+  // Launcher self-update (website install only; the Steam copy is updated by Steam)
+  getUpdateStatus: () => ipcRenderer.invoke('updater:status'),
+  installUpdate: () => ipcRenderer.invoke('updater:install'),
+  onUpdateStatus: (cb) => on('updater:status', cb),
+
   // Download / installer
   chooseDownloadLocation: () => ipcRenderer.invoke('download:choose-location'),
   startDownload: (filePath) => ipcRenderer.send('download:start', String(filePath)),

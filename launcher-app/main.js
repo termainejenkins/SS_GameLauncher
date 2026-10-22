@@ -7,6 +7,7 @@ const { execFile } = require('child_process');
 const cfg = require('./config');
 const { createAccountManager } = require('./account');
 const launch = require('./game-launch');
+const updater = require('./updater');
 
 const account = createAccountManager({ app, safeStorage, shell, utilityProcess });
 
@@ -89,7 +90,34 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
   if (SELFCHECK_OUT) return runSelfcheck(SELFCHECK_OUT);
   createWindow();
+  initUpdater();
 });
+
+// ---------------- launcher self-update (website install only; see updater.js) ----------------
+
+const updatePolicy = updater.updatePolicy({
+  isPackaged: app.isPackaged,
+  launchCfg,
+  execPath: process.execPath,
+  resourcesPath: process.resourcesPath,
+  launchedBySteam: launch.launchedBySteam(),
+});
+let updateCtl = null;
+
+function initUpdater() {
+  try {
+    updateCtl = updater.startAutoUpdate({
+      app,
+      policy: updatePolicy,
+      logDir: path.join(app.getPath('userData'), 'logs'),
+      send: (st) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('updater:status', st); },
+      isBusy: () => !!gameChild || waitingForGame,
+    });
+  } catch (_) { updateCtl = null; } // never blocks the launcher
+}
+
+ipcMain.handle('updater:status', () => (updateCtl ? updateCtl.getStatus() : { state: 'disabled', reason: updatePolicy.reason, current: app.getVersion() }));
+ipcMain.handle('updater:install', () => (updateCtl ? updateCtl.install() : { ok: false, reason: 'disabled' }));
 
 app.on('window-all-closed', () => {
   if (waitingForGame) return; // close-and-wait: stay (windowless) until the game exits
@@ -290,7 +318,7 @@ ipcMain.on('installer:run', (event, filePath) => {
 // also runs the real exe launch (playExe) against whatever launcher-config.json points at.
 async function runSelfcheck(outFile) {
   const report = { at: new Date().toISOString(), packaged: app.isPackaged, exe: process.execPath, launcherDir: LAUNCHER_DIR,
-    config: launchCfg, launchedBySteam: launch.launchedBySteam(), argv: process.argv.slice(1), forwarded: launch.forwardedArgs(process.argv, app.isPackaged) };
+    config: launchCfg, launchedBySteam: launch.launchedBySteam(), version: app.getVersion(), updater: updatePolicy, argv: process.argv.slice(1), forwarded: launch.forwardedArgs(process.argv, app.isPackaged) };
   const save = () => { try { fs.writeFileSync(outFile, JSON.stringify(report, null, 2)); } catch (_) { /* ignore */ } };
   const mem = () => app.getAppMetrics().map((m) => ({ type: m.type, MB: Math.round(m.memory.workingSetSize / 1024) }));
   try {

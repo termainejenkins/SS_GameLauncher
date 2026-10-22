@@ -1,6 +1,6 @@
 {
   "name": "launcher-app",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -9,7 +9,7 @@
     "smoke:steam": "electron scripts/smoke-steam.js",
     "screenshots": "electron scripts/screenshots.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dist": "electron-builder --win dir --x64",
+    "dist": "electron-builder --win dir --x64 --publish never",
     "dist:check": "node scripts/check-dist.js",
     "dist:installer": "node scripts/build-installer.js"
   },
@@ -40,6 +40,7 @@
     "define-data-property": "^1.1.4",
     "define-properties": "^1.2.1",
     "detect-node": "^2.1.0",
+    "electron-updater": "~6.3.9",
     "emoji-regex": "^8.0.0",
     "end-of-stream": "^1.4.4",
     "env-paths": "^2.2.1",
@@ -120,8 +121,17 @@
     "electronDist": "node_modules/electron/dist",
     "npmRebuild": false,
     "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "termainejenkins",
+        "repo": "SS_GameLauncher",
+        "releaseType": "release"
+      }
+    ],
     "files": [
       "main.js",
+      "updater.js",
       "preload.js",
       "renderer.js",
       "account.js",

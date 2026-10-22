@@ -172,6 +172,65 @@ const good = { v: 1, steamid: '76561198000000000', discord_id: '1', entitlements
     const r = await fetch(`${cfg.ACCOUNT_SERVER_URL}/steam/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ticket: '00112233445566778899aabbccddeeff', appid: 480 }) });
     const b = await r.json(); assert.strictEqual(r.status, 400); assert.strictEqual(b.error, 'bad_appid');
   });
+  // ---------- launcher self-update policy (updater.js) ----------
+  {
+    const fs = require('fs'); const os = require('os'); const path = require('path');
+    const { updatePolicy, scrub, createLogger } = require('../updater');
+    const { loadLaunchConfig } = require('../game-launch');
+    const mk = (cfgFile, withYml) => {
+      const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ssgl-upd-'));
+      if (cfgFile) fs.copyFileSync(path.join(__dirname, '..', 'build', cfgFile), path.join(d, 'launcher-config.json'));
+      fs.mkdirSync(path.join(d, 'resources'));
+      if (withYml) fs.writeFileSync(path.join(d, 'resources', 'app-update.yml'), 'provider: github\nowner: termainejenkins\nrepo: SS_GameLauncher\n');
+      return d;
+    };
+    const pol = (d, extra = {}) => updatePolicy({ isPackaged: true, launchCfg: loadLaunchConfig(d), execPath: path.join(d, 'TGC_Launcher.exe'), resourcesPath: path.join(d, 'resources'), launchedBySteam: false, ...extra });
+    await t('update: Steam depot config (build/launcher-config.json) -> self-update OFF, even with app-update.yml', () => {
+      const r = pol(mk('launcher-config.json', true)); assert.strictEqual(r.enabled, false); assert.strictEqual(r.reason, 'steam_depot_copy');
+    });
+    await t('update: packaged with NO launcher-config.json (defaults to exe) -> OFF', () => {
+      const r = pol(mk(null, true)); assert.strictEqual(r.enabled, false); assert.strictEqual(r.reason, 'no_launcher_config');
+    });
+    await t('update: web config (launcher-config.web.json) + app-update.yml -> ON', () => {
+      const r = pol(mk('launcher-config.web.json', true)); assert.strictEqual(r.enabled, true); assert.strictEqual(r.reason, 'web_install');
+    });
+    await t('update: web config but no app-update.yml -> OFF', () => {
+      assert.strictEqual(pol(mk('launcher-config.web.json', false)).reason, 'no_app_update_yml');
+    });
+    await t('update: web config inside a Steam library (steamapps) -> OFF', () => {
+      const d = mk('launcher-config.web.json', true);
+      const r = pol(d, { execPath: 'D:\\SteamLibrary\\steamapps\\common\\THE GREAT CIRCLE\\WindowsNoEditor\\Launcher\\TGC_Launcher.exe' });
+      assert.strictEqual(r.enabled, false); assert.strictEqual(r.reason, 'inside_steam_library');
+    });
+    await t('update: started by Steam -> OFF', () => {
+      assert.strictEqual(pol(mk('launcher-config.web.json', true), { launchedBySteam: true }).reason, 'started_by_steam');
+    });
+    await t('update: not packaged (npm start) -> OFF', () => {
+      assert.strictEqual(pol(mk('launcher-config.web.json', true), { isPackaged: false }).reason, 'not_packaged');
+    });
+    await t('update: bad input never throws', () => {
+      assert.strictEqual(updatePolicy(null).enabled, false); assert.strictEqual(updatePolicy({ isPackaged: true }).enabled, false);
+    });
+    await t('update: log scrubber removes tokens/passwords', () => {
+      const out = scrub('GET https://x/y?token=abc123&a=1 Authorization: Bearer eyJhbGciOi password=hunter2 ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123');
+      for (const leak of ['abc123', 'eyJhbGciOi', 'hunter2', 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123']) assert.ok(!out.includes(leak), 'leaked ' + leak);
+      assert.ok(out.includes('a=1'));
+    });
+    await t('update: logger writes a scrubbed line and never throws', () => {
+      const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ssgl-log-'));
+      const log = createLogger(d); log.error('boom session=s3cr3t', new Error('x')); log.info({ a: 1 });
+      const txt = fs.readFileSync(log.file, 'utf8'); assert.ok(txt.includes('ERROR boom')); assert.ok(!txt.includes('s3cr3t'));
+      createLogger('\0bad').error('no throw');
+    });
+    await t('update: package.json publish = github termainejenkins/SS_GameLauncher, artifactName + exe name unchanged, no publisherName', () => {
+      const pkg = require('../package.json'); const p = pkg.build.publish[0];
+      assert.deepStrictEqual([p.provider, p.owner, p.repo], ['github', 'termainejenkins', 'SS_GameLauncher']);
+      assert.strictEqual(pkg.build.nsis.artifactName, 'SS_GameLauncher-Setup-${version}.${ext}');
+      assert.strictEqual(pkg.build.executableName, 'TGC_Launcher');
+      assert.ok(!('publisherName' in (pkg.build.win || {})) && !('verifyUpdateCodeSignature' in (pkg.build.win || {})));
+      assert.ok(pkg.build.files.includes('updater.js')); assert.ok(pkg.dependencies['electron-updater']);
+    });
+  }
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
   process.exit(failed ? 1 : 0);
 })();
