@@ -246,6 +246,14 @@ const good = { v: 1, steamid: '76561198000000000', discord_id: '1', entitlements
       const nd = html.indexOf('data-scroll="downloads"'), na = html.indexOf('data-scroll="account"');
       assert.ok(nd > 0 && na > 0 && nd < na, 'Downloads nav button should come before Discord unlocks');
     });
+    await t('ui: hero art picks v9 or the trio at random (renderer .hero-trio class, CSS variant, both images exist)', () => {
+      const fs = require('fs'); const path = require('path'); const rd = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+      assert.ok(rd('renderer.js').includes("document.querySelector('.hero-art')?.classList.toggle('hero-trio', Math.random() < 0.5);"), 'renderer random pick missing');
+      const css = rd('styles.css');
+      assert.ok(/\.hero-art \{[^}]*tgc-hero-v9\.png[^}]*image-set\(url\("assets\/art\/tgc-hero-v9\.png"\) 1x, url\("assets\/art\/tgc-hero-v9_2x\.png"\) 2x\)/.test(css), 'v9 default + 2x missing');
+      assert.ok(css.includes('.hero-art.hero-trio { background-image: url("assets/art/tgc-hero-trio-v1e.png"); }'), 'trio CSS variant missing');
+      for (const f of ['tgc-hero-v9.png', 'tgc-hero-v9_2x.png', 'tgc-hero-trio-v1e.png']) assert.ok(fs.existsSync(path.join(__dirname, '..', 'assets', 'art', f)), f + ' missing');
+    });
   }
   // ---------- Play when the account owns nothing / Steam is closed (account.js + main.js + renderer.js) ----------
   {

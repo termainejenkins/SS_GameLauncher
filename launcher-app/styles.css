@@ -197,6 +197,8 @@ body.theme-light .copyright-mark.mark-light { display: block; }
   background-image: image-set(url("assets/art/tgc-hero-v9.png") 1x, url("assets/art/tgc-hero-v9_2x.png") 2x);
   filter: sepia(.32) saturate(1.25) contrast(1.06) brightness(.98);
 }
+/* Alternate hero: trio (Jasiri, Lyanne, Kivuli) v1e, 1x only. renderer.js adds .hero-trio on ~50% of launches; no class = v9. */
+.hero-art.hero-trio { background-image: url("assets/art/tgc-hero-trio-v1e.png"); }
 /* warm the cool in-game dusk toward the launcher's savanna palette */
 .hero::before {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
@@ -249,6 +251,7 @@ body.theme-light .copyright-mark.mark-light { display: block; }
 /* Small windows (down to the 980x640 minimum): smaller title, narrower tagline and a left-shifted crop so Juma (v9 hero) stays clear of the text. 1280x800 is unaffected. */
 @media (max-width: 1279px) {
   .hero-art { background-position: 6% 38%; }
+  .hero-art.hero-trio { background-position: 16% 38%; } /* trio sits further right: keep Jasiri inside the frame */
   .hero-title { font-size: 36px; }
   .hero-tag { font-size: 14px; max-width: 390px; }
 }

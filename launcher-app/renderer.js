@@ -2,6 +2,10 @@
 // `launcher` is the global that preload.js exposes via contextBridge (window.launcher).
 const BACKEND_URL = 'http://localhost:3000';
 
+// Hero art: v9 (Juma + Kivuli) or the trio (Jasiri, Lyanne, Kivuli), picked at random each time the launcher opens.
+// No class = v9 (styles.css .hero-art); .hero-trio swaps in the trio image.
+document.querySelector('.hero-art')?.classList.toggle('hero-trio', Math.random() < 0.5);
+
 // Render news content as plain text. HTML from the server is parsed inertly (DOMParser does not run
 // scripts or load images) and only http(s) links are kept, as text anchors that open in the system browser.
 function renderNewsContent(container, html) {
