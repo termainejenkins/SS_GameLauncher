@@ -2,7 +2,7 @@
 
 Private intake for the launcher's **Report a bug** form. The launcher zips logs and posts them to `POST /api/bug-report`. This Worker checks the upload, rate-limits it, stores it in a private R2 bucket, and posts a short note to Discord.
 
-Nothing in this folder is deployed by the pull request. TJ runs the steps below when the Discord channel and the log folder name are confirmed.
+Nothing in this folder is deployed by the pull request. The saved-project folder is confirmed (`TheGreatCircle_4_27`; a 5.8 build may rename it). TJ runs the steps below when the Discord channel is ready.
 
 ## What it accepts
 
@@ -99,7 +99,6 @@ Tests use Vitest on Node with in-memory R2 and KV stand-ins. The Workers Vitest 
 
 ## Still TODO
 
-- Confirm `GAME_SAVED_PROJECT_DIR` on TJ's PC (launcher config, not this Worker).
 - Create the private Discord channel and webhook.
 - Create the R2 bucket and KV namespace, set `DISCORD_WEBHOOK_URL`, deploy.
 - Put the deployed URL in the launcher's `BUG_REPORT_URL`. Until then the launcher refuses to send.

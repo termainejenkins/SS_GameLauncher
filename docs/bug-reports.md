@@ -19,10 +19,10 @@ Success and failure show on the form, including the "too many reports today" cas
 
 System info, when the box is checked: launcher version, game build and branch if the launcher knows them, OS version, CPU, GPU, driver version, RAM, and VRAM when Electron reports it. No username, no machine name, no IP.
 
-Logs, when the box is checked:
+Logs, when the box is checked, come from the confirmed folder `%LOCALAPPDATA%\TheGreatCircle_4_27\` (`GAME_SAVED_PROJECT_DIR`). A 5.8 build may rename that folder; it is the only config value to change. This is not the entitlement folder `SentientSolutions\TGC`.
 
-- Newest `TGC.log` from `%LOCALAPPDATA%\<GAME_SAVED_PROJECT_DIR>\Saved\Logs\`
-- The newest folder under `Saved\Crashes\` — `CrashContext.runtime-xml`, logs, and the minidump
+- Newest `*.log` in `Saved\Logs\`, by modification time. `cef3.log` and any other `cef*` log are skipped, so the file is `TheGreatCircle_4_27.log` or a newer timestamped `TheGreatCircle_4_27-backup-*.log`.
+- The newest `UECC-Windows-*` folder under `Saved\Crashes\` — only `CrashContext.runtime-xml`, the crash `.log`, and the minidump.
 
 The zip is capped at 25 MB. If the log is larger, the newest part is kept and the rest is dropped. Minidumps that still do not fit are left out. `.ini` files, `Saved\Config`, tokens, passwords, webhook URLs, the clipboard, and anything outside that allowlist are not packed.
 
@@ -81,11 +81,10 @@ That runs `node --test bug-report.test.js` in `launcher-app/` and Vitest in `bug
 
 ## Still TODO
 
-- Confirm the Unreal project folder on TJ's install and set `GAME_SAVED_PROJECT_DIR` in `launcher-app/config.js`. The placeholder is `TheGreatCircle`. The shipping exe is `TheGreatCircle*.exe`, so it might instead be `TheGreatCircle_4_27`. Look in `%LOCALAPPDATA%` for `Saved\Logs\TGC.log`. This is not the entitlement folder `SentientSolutions\TGC`.
 - Set `BUG_REPORT_URL` to the deployed Worker. Until then Send does not upload.
 - Create the private Discord channel and webhook, then `wrangler secret put DISCORD_WEBHOOK_URL`.
 - Create the R2 bucket and KV namespace, apply the lifecycle rule, replace the placeholder KV ids, and deploy. Do not enable public read on the bucket.
-- Optional: add `gameBuild` and `gameBranch` to `launcher-config.json` beside the game. If they are absent, the launcher uses a `LogInit: Build:` line from `TGC.log` when it can see that file.
+- Optional: add `gameBuild` and `gameBranch` to `launcher-config.json` beside the game. If they are absent, the launcher uses a `LogInit: Build:` line from the game log when it can see that file.
 - Ship a launcher build only with TJ's OK. This change does not bump the version, tag a release, or delete old releases.
 
 ## Assumptions
