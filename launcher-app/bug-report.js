@@ -25,10 +25,11 @@ const MANIFEST_RESERVE = 8192;
 const ENTRY_OK = [
   /^manifest\.json$/,
   /^system-info\.json$/,
-  /^logs\/TGC[^/]*\.log$/i,
-  /^crashes\/[A-Za-z0-9._-]+\/CrashContext\.runtime-xml$/i,
-  /^crashes\/[A-Za-z0-9._-]+\/[^/]+\.log$/i,
-  /^crashes\/[A-Za-z0-9._-]+\/[^/]+\.(?:dmp|mdmp)$/i,
+  // Any game log name (TheGreatCircle_4_27.log, timestamped -backup-*.log, older TGC.log). Not cef*.
+  /^logs\/(?!cef)[A-Za-z0-9][A-Za-z0-9._-]*\.log$/i,
+  /^crashes\/UECC-Windows-[A-Za-z0-9._-]+\/CrashContext\.runtime-xml$/i,
+  /^crashes\/UECC-Windows-[A-Za-z0-9._-]+\/(?!cef)[^/]+\.log$/i,
+  /^crashes\/UECC-Windows-[A-Za-z0-9._-]+\/[^/]+\.(?:dmp|mdmp)$/i,
 ];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -286,18 +287,25 @@ function listDir(dir, fsImpl) {
   try { return fsImpl.readdirSync(dir, { withFileTypes: true }); } catch (_) { return []; }
 }
 
+/** Game logs are any *.log except CEF (cef3.log and other cef* files). The name is not fixed. */
+function isGameLogFileName(name) {
+  return isAllowedReportPath(`logs/${name}`);
+}
+
+/** Unreal crash directories are named UECC-Windows-<id>. */
+function isCrashFolderName(name) {
+  return /^UECC-Windows-[A-Za-z0-9._-]+$/.test(name);
+}
+
 function findGameLog(logsDir, fsImpl) {
-  const exact = path.join(logsDir, 'TGC.log');
-  try {
-    if (fsImpl.statSync(exact).isFile()) return exact;
-  } catch (_) { /* fall through */ }
   let best = null;
   let bestM = -1;
   for (const d of listDir(logsDir, fsImpl)) {
-    if (!d.isFile() || !/^TGC.*\.log$/i.test(d.name)) continue;
+    if (!d.isFile() || !isGameLogFileName(d.name)) continue;
     const full = path.join(logsDir, d.name);
     let st;
     try { st = fsImpl.statSync(full); } catch (_) { continue; }
+    if (!st.isFile()) continue;
     if (st.mtimeMs >= bestM) { bestM = st.mtimeMs; best = full; }
   }
   return best;
@@ -307,7 +315,7 @@ function newestCrashDir(crashesDir, fsImpl) {
   let best = null;
   let bestM = -1;
   for (const d of listDir(crashesDir, fsImpl)) {
-    if (!d.isDirectory()) continue;
+    if (!d.isDirectory() || !isCrashFolderName(d.name)) continue;
     const full = path.join(crashesDir, d.name);
     let st;
     try { st = fsImpl.statSync(full); } catch (_) { continue; }
@@ -641,14 +649,14 @@ function prepareBugReport(options = {}) {
     }
     if (attachLogs) {
       if (!logPath) {
-        notes.push(`No TGC.log under %LOCALAPPDATA%\\${projectDir}\\Saved\\Logs. Confirm GAME_SAVED_PROJECT_DIR.`);
+        notes.push('No logs were found.');
       } else {
         try {
           const read = readLogTail(logPath, Math.min(LOG_PRETAIL_BYTES, maxZipBytes), fsImpl);
           let text = cleanUserText(decodeWith(read.buf, read.encoding), userNames);
           if (read.truncated) {
             text = TAIL_NOTE + text;
-            notes.push('TGC.log was shortened to its newest part before packing.');
+            notes.push('The game log was shortened to its newest part before packing.');
           }
           const base = path.basename(logPath);
           const rel = `logs/${base}`;

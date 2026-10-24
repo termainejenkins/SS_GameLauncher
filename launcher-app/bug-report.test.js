@@ -95,8 +95,12 @@ test('file allowlist accepts logs, crash context, and minidumps only', () => {
     'system-info.json',
     'logs/TGC.log',
     'logs/TGC_2.log',
+    'logs/other.log',
+    'logs/TheGreatCircle_4_27.log',
+    'logs/TheGreatCircle_4_27-backup-2026.10.24-12.00.00.log',
     'crashes/UECC-Windows-1/CrashContext.runtime-xml',
     'crashes/UECC-Windows-1/TGC.log',
+    'crashes/UECC-Windows-1/TheGreatCircle_4_27.log',
     'crashes/UECC-Windows-1/UECC-Windows-1.dmp',
     'crashes/UECC-Windows-1/crash.mdmp',
   ];
@@ -114,12 +118,128 @@ test('file allowlist rejects ini, config, tokens, clipboard, and other folders',
     'webhook.txt',
     '../secrets.txt',
     'crashes/UECC-Windows-1/notes.txt',
-    'logs/other.log',
+    'logs/cef3.log',
+    'logs/cef.log',
+    'logs/CEF3.log',
+    'logs/cef-debug.log',
+    'crashes/NotACrash/CrashContext.runtime-xml',
+    'crashes/UECC-old/TGC.log',
+    'crashes/UECC-Windows-1/cef3.log',
     'C:/Users/Alice/TGC.log',
     'crashes/UECC-Windows-1/../../etc/passwd',
     'Saved/Config/GameUserSettings.ini',
   ];
   for (const name of rejected) assert.equal(bug.isAllowedReportPath(name), false, name);
+});
+
+function touch(file, iso) {
+  const t = new Date(iso);
+  fs.utimesSync(file, t, t);
+}
+
+function prepareFrom(dir, projectDir) {
+  return bug.prepareBugReport({
+    description: 'x'.repeat(40),
+    category: 'crash',
+    attachLogs: true,
+    attachSystemInfo: false,
+    localAppData: dir,
+    projectDir,
+    forSend: true,
+  });
+}
+
+function logEntries(prepared) {
+  return bug.readZipEntries(prepared.zip).filter((e) => e.name.startsWith('logs/'));
+}
+
+test('log picking skips cef logs and keeps the newest game log', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-bug-logs-'));
+  const projectDir = cfg.GAME_SAVED_PROJECT_DIR;
+  try {
+    const logs = path.join(dir, projectDir, 'Saved', 'Logs');
+    fs.mkdirSync(logs, { recursive: true });
+    const mainLog = path.join(logs, 'TheGreatCircle_4_27.log');
+    const backup = path.join(logs, 'TheGreatCircle_4_27-backup-2026.10.24-12.00.00.log');
+    const cef = path.join(logs, 'cef3.log');
+    const cefOther = path.join(logs, 'cef-debug.log');
+    fs.writeFileSync(mainLog, 'OLD_GAME_LOG\n');
+    fs.writeFileSync(backup, 'NEW_BACKUP_LOG\n');
+    fs.writeFileSync(cef, 'CEF3_SHOULD_NOT_ATTACH\n');
+    fs.writeFileSync(cefOther, 'CEF_DEBUG_SHOULD_NOT_ATTACH\n');
+    fs.writeFileSync(path.join(logs, 'notes.txt'), 'NOT_A_LOG\n');
+    touch(mainLog, '2026-10-01T00:00:00Z');
+    touch(backup, '2026-10-20T00:00:00Z');
+    touch(cefOther, '2026-10-22T00:00:00Z');
+    touch(cef, '2026-10-24T00:00:00Z');
+
+    const prepared = prepareFrom(dir, projectDir);
+    assert.equal(prepared.ok, true, prepared.error);
+    const packed = logEntries(prepared);
+    assert.deepEqual(packed.map((e) => e.name), [
+      'logs/TheGreatCircle_4_27-backup-2026.10.24-12.00.00.log',
+    ]);
+    const text = packed[0].data.toString('utf8');
+    assert.equal(text.includes('NEW_BACKUP_LOG'), true);
+    assert.equal(text.includes('OLD_GAME_LOG'), false);
+    assert.equal(text.includes('CEF3_SHOULD_NOT_ATTACH'), false);
+    assert.equal(text.includes('CEF_DEBUG_SHOULD_NOT_ATTACH'), false);
+    assert.equal(text.includes('NOT_A_LOG'), false);
+    assert.equal(prepared.notes.some((n) => /no logs/i.test(n)), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('log picking uses TheGreatCircle_4_27.log when it is the newest game log', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-bug-mainlog-'));
+  const projectDir = cfg.GAME_SAVED_PROJECT_DIR;
+  try {
+    const logs = path.join(dir, projectDir, 'Saved', 'Logs');
+    fs.mkdirSync(logs, { recursive: true });
+    const mainLog = path.join(logs, 'TheGreatCircle_4_27.log');
+    const backup = path.join(logs, 'TheGreatCircle_4_27-backup-2026.09.01-01.00.00.log');
+    fs.writeFileSync(mainLog, 'CURRENT_GAME_LOG\n');
+    fs.writeFileSync(backup, 'OLDER_BACKUP_LOG\n');
+    touch(backup, '2026-09-01T00:00:00Z');
+    touch(mainLog, '2026-10-24T00:00:00Z');
+    const prepared = prepareFrom(dir, projectDir);
+    assert.equal(prepared.ok, true, prepared.error);
+    const packed = logEntries(prepared);
+    assert.deepEqual(packed.map((e) => e.name), ['logs/TheGreatCircle_4_27.log']);
+    assert.equal(packed[0].data.toString('utf8').includes('CURRENT_GAME_LOG'), true);
+    assert.equal(packed[0].data.toString('utf8').includes('OLDER_BACKUP_LOG'), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('no logs gives a clean no-logs result', () => {
+  const projectDir = cfg.GAME_SAVED_PROJECT_DIR;
+  function assertNoLogs(prepared) {
+    assert.equal(prepared.ok, true, prepared.error);
+    assert.deepEqual(logEntries(prepared), []);
+    assert.deepEqual(prepared.notes, ['No logs were found.']);
+    const blob = bug.readZipEntries(prepared.zip).map((e) => e.data.toString('utf8')).join('\n');
+    assert.equal(blob.includes('CEF3_ONLY'), false);
+    assert.equal(/confirm|GAME_SAVED_PROJECT_DIR|TGC\.log/i.test(prepared.notes.join('\n')), false);
+  }
+
+  const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-bug-nologs-'));
+  const cefDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-bug-cefonl-'));
+  try {
+    fs.mkdirSync(path.join(emptyDir, projectDir, 'Saved', 'Logs'), { recursive: true });
+    assertNoLogs(prepareFrom(emptyDir, projectDir));
+
+    const logs = path.join(cefDir, projectDir, 'Saved', 'Logs');
+    fs.mkdirSync(logs, { recursive: true });
+    fs.writeFileSync(path.join(logs, 'cef3.log'), 'CEF3_ONLY\n');
+    fs.writeFileSync(path.join(logs, 'CEF.log'), 'CEF_ONLY\n');
+    assertNoLogs(prepareFrom(cefDir, projectDir));
+  } finally {
+    fs.rmSync(emptyDir, { recursive: true, force: true });
+    fs.rmSync(cefDir, { recursive: true, force: true });
+  }
 });
 
 test('25 MB cap constant, and a zip over the cap is tailed to the cap', async () => {
@@ -203,12 +323,14 @@ test('collection keeps the newest crash folder and drops ini, tokens, and config
   try {
     const root = path.join(dir, 'TheGreatCircle', 'Saved');
     const logs = path.join(root, 'Logs');
-    const oldCrash = path.join(root, 'Crashes', 'UECC-old');
-    const newCrash = path.join(root, 'Crashes', 'UECC-new');
+    const oldCrash = path.join(root, 'Crashes', 'UECC-Windows-old');
+    const newCrash = path.join(root, 'Crashes', 'UECC-Windows-new');
+    const decoyCrash = path.join(root, 'Crashes', 'NotUECC');
     const configDir = path.join(root, 'Config', 'Windows');
     fs.mkdirSync(logs, { recursive: true });
     fs.mkdirSync(oldCrash, { recursive: true });
     fs.mkdirSync(newCrash, { recursive: true });
+    fs.mkdirSync(decoyCrash, { recursive: true });
     fs.mkdirSync(configDir, { recursive: true });
     const secret = 'super-secret-token-value';
     fs.writeFileSync(path.join(configDir, 'Game.ini'), `User=C:\\Users\\${USER}\\\nToken=${secret}\n`);
@@ -221,13 +343,18 @@ test('collection keeps the newest crash folder and drops ini, tokens, and config
     fs.writeFileSync(path.join(oldCrash, 'CrashContext.runtime-xml'), '<old/>');
     fs.writeFileSync(path.join(newCrash, 'CrashContext.runtime-xml'), `<ctx>C:\\Users\\${USER}\\crash</ctx>`);
     fs.writeFileSync(path.join(newCrash, 'TGC.log'), `C:/Users/${USER}/crash.log`);
-    fs.writeFileSync(path.join(newCrash, 'UECC-new.dmp'), Buffer.from('MDMP-not-text'));
+    fs.writeFileSync(path.join(newCrash, 'UECC-Windows-new.dmp'), Buffer.from('MDMP-not-text'));
     fs.writeFileSync(path.join(newCrash, 'CrashReportClient.ini'), `Password=${secret}`);
     fs.writeFileSync(path.join(newCrash, 'auth-token.txt'), secret);
+    fs.writeFileSync(path.join(decoyCrash, 'CrashContext.runtime-xml'), '<decoy/>');
+    fs.writeFileSync(path.join(decoyCrash, 'decoy.log'), 'decoy-log');
+    fs.writeFileSync(path.join(decoyCrash, 'decoy.dmp'), Buffer.from('decoy-dmp'));
     const oldTime = new Date('2020-01-01T00:00:00Z');
     const newTime = new Date('2026-10-01T00:00:00Z');
+    const decoyTime = new Date('2026-10-20T00:00:00Z');
     fs.utimesSync(oldCrash, oldTime, oldTime);
     fs.utimesSync(newCrash, newTime, newTime);
+    fs.utimesSync(decoyCrash, decoyTime, decoyTime);
 
     const prepared = bug.prepareBugReport({
       description: `Crashed after C:\\Users\\${USER}\\AppData load. The animal did not spawn.`,
@@ -251,9 +378,9 @@ test('collection keeps the newest crash folder and drops ini, tokens, and config
     const entries = bug.readZipEntries(prepared.zip);
     const names = entries.map((e) => e.name).sort();
     assert.deepEqual(names, [
-      'crashes/UECC-new/CrashContext.runtime-xml',
-      'crashes/UECC-new/TGC.log',
-      'crashes/UECC-new/UECC-new.dmp',
+      'crashes/UECC-Windows-new/CrashContext.runtime-xml',
+      'crashes/UECC-Windows-new/TGC.log',
+      'crashes/UECC-Windows-new/UECC-Windows-new.dmp',
       'logs/TGC.log',
       'manifest.json',
       'system-info.json',
@@ -267,6 +394,8 @@ test('collection keeps the newest crash folder and drops ini, tokens, and config
     assert.equal(blob.includes('[steam]'), true);
     assert.equal(blob.includes('<user>'), true);
     assert.equal(blob.includes('<old/>'), false);
+    assert.equal(blob.includes('<decoy/>'), false);
+    assert.equal(blob.includes('decoy-log'), false);
     assert.equal(blob.includes('clipboard'), false);
     const sys = JSON.parse(entries.find((e) => e.name === 'system-info.json').data.toString('utf8'));
     assert.equal(sys.launcherVersion, '1.1.5');
@@ -336,7 +465,7 @@ test('placeholder URL sends nothing', async () => {
     assert.match(result.message, /nothing was sent/i);
     assert.equal(bug.isBugReportConfigured(cfg.BUG_REPORT_URL), false);
     assert.equal(cfg.BUG_REPORT_URL, bug.BUG_REPORT_URL_PLACEHOLDER);
-    assert.equal(cfg.GAME_SAVED_PROJECT_DIR, 'TheGreatCircle');
+    assert.equal(cfg.GAME_SAVED_PROJECT_DIR, 'TheGreatCircle_4_27');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
