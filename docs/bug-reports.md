@@ -1,0 +1,99 @@
+# Report a bug
+
+Opt-in only. The launcher shows a preview of the files and their size, and nothing is uploaded until the player presses **Send**.
+
+## What the player sees
+
+Sidebar item **Report a bug**:
+
+- Description, required, 20–2000 characters
+- Category: crash, performance, gameplay, or other
+- Optional screenshot (PNG or JPG, 8 MB)
+- **Attach logs** (on by default) and **Attach system info** (on by default)
+- One line of consent: what is sent, and that it is used only to fix bugs
+- A file list and the total upload size before Send
+
+Success and failure show on the form, including the "too many reports today" case (HTTP 429).
+
+## What is collected
+
+System info, when the box is checked: launcher version, game build and branch if the launcher knows them, OS version, CPU, GPU, driver version, RAM, and VRAM when Electron reports it. No username, no machine name, no IP.
+
+Logs, when the box is checked:
+
+- Newest `TGC.log` from `%LOCALAPPDATA%\<GAME_SAVED_PROJECT_DIR>\Saved\Logs\`
+- The newest folder under `Saved\Crashes\` — `CrashContext.runtime-xml`, logs, and the minidump
+
+The zip is capped at 25 MB. If the log is larger, the newest part is kept and the rest is dropped. Minidumps that still do not fit are left out. `.ini` files, `Saved\Config`, tokens, passwords, webhook URLs, the clipboard, and anything outside that allowlist are not packed.
+
+The Windows user name is replaced with `<user>` in paths inside text files, in system info, and in the description (backslashes, forward slashes, mixed case, `C:\Users\<name>\`, a `%USERPROFILE%` path, and JSON `\\` escapes). SteamID64 values in those text files are replaced with `[steam]`.
+
+The install id is a random UUID in the launcher's settings file. Only its SHA-256 hash is uploaded, and only as the rate-limit key. It is not written into the R2 metadata.
+
+`BUG_REPORT_URL` in `launcher-app/config.js` is a `.invalid` placeholder. Send refuses to open a connection until that constant is a real `https://` URL.
+
+## Where it lands
+
+The Worker (`bug-report-worker/`) stores the zip at `reports/<YYYY-MM-DD>/<id>.zip` plus `<id>.json` in a private R2 bucket, then posts a short note to Discord (category, game build, GPU, first 200 characters of the description, report id). A Discord failure does not delete the stored report. `@everyone` and `@here` cannot ping the channel.
+
+Rate limit: 5 reports per install-id hash per UTC day, and 20 per daily-salted IP hash. The raw IP is not stored or logged. See the Worker README for why this uses KV rather than a Durable Object.
+
+Reports are kept 90 days (R2 lifecycle rule, with a daily cron as a backup). The bucket is not publicly readable.
+
+## Deploy steps for TJ (later — not part of this change)
+
+Do this from `bug-report-worker/` after `npx wrangler@4 login`. Do not put the webhook on the command line; `secret put` asks for it.
+
+1. Create a private R2 bucket. Leave r2.dev and any public domain off.
+   ```sh
+   npx wrangler@4 r2 bucket create tgc-bug-reports
+   ```
+2. Expire objects under `reports/` after 90 days. Do not add a bucket lock on that prefix (a lock would block deletion).
+   ```sh
+   npx wrangler@4 r2 bucket lifecycle add tgc-bug-reports expire-bug-reports-90d reports/ --expire-days 90
+   ```
+3. Create the rate-limit KV namespace and replace the all-zero `id` and `preview_id` in `bug-report-worker/wrangler.toml`.
+   ```sh
+   npx wrangler@4 kv namespace create RATE
+   npx wrangler@4 kv namespace create RATE --preview
+   ```
+4. Create a private Discord channel and webhook, then store the URL as a Worker secret:
+   ```sh
+   npx wrangler@4 secret put DISCORD_WEBHOOK_URL
+   ```
+5. Deploy:
+   ```sh
+   npx wrangler@4 deploy
+   ```
+6. Set `BUG_REPORT_URL` in `launcher-app/config.js` to `https://<worker-host>/api/bug-report`.
+
+Optional: `npx wrangler@4 secret put RATE_LIMIT_SALT` adds a pepper so a copy of the KV namespace cannot be matched back to an IP. The Worker runs without it.
+
+More detail (what each field is, the cron lookback, how to run tests) is in [bug-report-worker/README.md](../bug-report-worker/README.md).
+
+## Tests
+
+```sh
+npm test
+```
+
+That runs `node --test bug-report.test.js` in `launcher-app/` and Vitest in `bug-report-worker/`.
+
+## Still TODO
+
+- Confirm the Unreal project folder on TJ's install and set `GAME_SAVED_PROJECT_DIR` in `launcher-app/config.js`. The placeholder is `TheGreatCircle`. The shipping exe is `TheGreatCircle*.exe`, so it might instead be `TheGreatCircle_4_27`. Look in `%LOCALAPPDATA%` for `Saved\Logs\TGC.log`. This is not the entitlement folder `SentientSolutions\TGC`.
+- Set `BUG_REPORT_URL` to the deployed Worker. Until then Send does not upload.
+- Create the private Discord channel and webhook, then `wrangler secret put DISCORD_WEBHOOK_URL`.
+- Create the R2 bucket and KV namespace, apply the lifecycle rule, replace the placeholder KV ids, and deploy. Do not enable public read on the bucket.
+- Optional: add `gameBuild` and `gameBranch` to `launcher-config.json` beside the game. If they are absent, the launcher uses a `LogInit: Build:` line from `TGC.log` when it can see that file.
+- Ship a launcher build only with TJ's OK. This change does not bump the version, tag a release, or delete old releases.
+
+## Assumptions
+
+- Screenshot cap is 8 MB, sent as its own multipart part so the 25 MB cap stays on the log zip.
+- The zip is built with Node's `zlib` (no new package). `yauzl` in the launcher only reads zips.
+- VRAM is filled when Electron's GPU info includes it. There is no WMI / PowerShell call.
+- Game build comes from `launcher-config.json` (`gameBuild`, `gameBranch`) or from `LogInit: Build:` in the log. The launcher does not guess a Steam beta branch.
+- Upload runs in the Electron main process. The page never sees log paths or the raw install UUID.
+- The install-id hash is only the rate-limit key. It is not stored next to the zip.
+- There is no CI workflow in this repo. `npm test` is the check.

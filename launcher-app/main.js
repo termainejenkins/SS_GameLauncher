@@ -8,6 +8,7 @@ const cfg = require('./config');
 const { createAccountManager } = require('./account');
 const launch = require('./game-launch');
 const updater = require('./updater');
+const bugReport = require('./bug-report');
 
 const account = createAccountManager({ app, safeStorage, shell, utilityProcess });
 
@@ -323,6 +324,139 @@ ipcMain.on('installer:run', (event, filePath) => {
       event.sender.send('download:error', 'Failed to launch installer: ' + error.message);
     }
   });
+});
+
+// ---------------- bug report (opt-in; nothing is uploaded until the player presses Send) ----------------
+
+let pendingScreenshot = null;
+let shotToken = 0;
+let gpuInfoPromise = null;
+// Reuse a preview while the player is typing. The zip does not depend on the description.
+let previewCache = null;
+const PREVIEW_TTL_MS = 5000;
+
+function bugReportGpu() {
+  if (!gpuInfoPromise) {
+    gpuInfoPromise = app.getGPUInfo('complete').then((info) => {
+      const devices = (info && info.gpuDevice) || [];
+      const active = devices.find((d) => d.active) || devices[0];
+      if (!active) return null;
+      const vram = [active.videoMemorySize, active.videoMemory, active.vramBytes].find((n) => Number.isFinite(n) && n > 0);
+      return {
+        name: active.deviceString || active.vendorString || null,
+        driverVersion: active.driverVersion || null,
+        vramBytes: Number.isFinite(vram) ? vram : null,
+      };
+    }).catch(() => null);
+  }
+  return gpuInfoPromise;
+}
+
+function bugReportOptions(extra) {
+  return {
+    localAppData: process.env.LOCALAPPDATA || '',
+    projectDir: cfg.GAME_SAVED_PROJECT_DIR,
+    settingsPath: path.join(app.getPath('userData'), 'bug-report-install-id.json'),
+    launcherVersion: app.getVersion(),
+    configPath: path.join(LAUNCHER_DIR, 'launcher-config.json'),
+    userNames: bugReport.userNamesFromEnv(process.env),
+    uploadUrl: cfg.BUG_REPORT_URL,
+    ...extra,
+  };
+}
+
+function bugReportFlags(opts) {
+  return {
+    description: opts && opts.description,
+    category: opts && opts.category,
+    attachLogs: !(opts && opts.attachLogs === false),
+    attachSystemInfo: !(opts && opts.attachSystemInfo === false),
+    screenshot: pendingScreenshot,
+  };
+}
+
+function previewPublic(preview) {
+  return {
+    ok: true,
+    zipEntries: preview.zipEntries,
+    zipBytes: preview.zipBytes,
+    screenshot: preview.screenshot,
+    totalBytes: preview.totalBytes,
+    notes: preview.notes,
+    configured: preview.configured,
+    descriptionOk: preview.descriptionOk,
+    descriptionError: preview.descriptionError,
+  };
+}
+
+ipcMain.handle('bug-report:preview', async (_event, opts) => {
+  try {
+    const flags = bugReportFlags(opts);
+    const key = `${flags.attachLogs ? 1 : 0}:${flags.attachSystemInfo ? 1 : 0}:${shotToken}`;
+    const fresh = previewCache && previewCache.key === key && (Date.now() - previewCache.at) < PREVIEW_TTL_MS;
+    if (fresh) {
+      const desc = bugReport.validateDescription(flags.description, bugReport.userNamesFromEnv(process.env));
+      return { ...previewCache.public, descriptionOk: desc.ok, descriptionError: desc.ok ? null : desc.error };
+    }
+    const gpu = await bugReportGpu();
+    const preview = bugReport.prepareBugReport(bugReportOptions({ ...flags, gpu }));
+    if (!preview || preview.ok === false) return { ok: false, error: (preview && preview.error) || 'Could not prepare the report.' };
+    const pub = previewPublic(preview);
+    previewCache = { key, at: Date.now(), public: pub };
+    return pub;
+  } catch (_) {
+    return { ok: false, error: 'Could not prepare the report.' };
+  }
+});
+
+ipcMain.handle('bug-report:send', async (_event, opts) => {
+  try {
+    previewCache = null;
+    const gpu = await bugReportGpu();
+    const result = await bugReport.sendBugReport(bugReportOptions({ ...bugReportFlags(opts), gpu }));
+    if (result && result.ok) {
+      pendingScreenshot = null;
+      shotToken += 1;
+    }
+    return result;
+  } catch (_) {
+    return { ok: false, message: 'Could not send the bug report.' };
+  }
+});
+
+ipcMain.handle('bug-report:pick-screenshot', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow || undefined, {
+    title: 'Attach a screenshot',
+    properties: ['openFile'],
+    filters: [{ name: 'PNG or JPG', extensions: ['png', 'jpg', 'jpeg'] }],
+  });
+  if (canceled || !filePaths || !filePaths[0]) return { picked: false };
+  const filePath = filePaths[0];
+  let st;
+  try { st = fs.statSync(filePath); } catch (_) { return { error: 'Could not read that file.' }; }
+  if (!st.isFile()) return { error: 'Choose an image file.' };
+  if (st.size > bugReport.SCREENSHOT_MAX_BYTES) return { error: 'Screenshot must be 8 MB or smaller.' };
+  let data;
+  try { data = fs.readFileSync(filePath); } catch (_) { return { error: 'Could not read that file.' }; }
+  const check = bugReport.validateScreenshot(data, filePath);
+  if (!check.ok) {
+    pendingScreenshot = null;
+    shotToken += 1;
+    previewCache = null;
+    return { error: check.error };
+  }
+  // Keep the bytes, not the path, so a later rename cannot swap in a different file.
+  pendingScreenshot = { filename: check.filename, contentType: check.contentType, data };
+  shotToken += 1;
+  previewCache = null;
+  return { picked: true, name: check.filename, bytes: data.length };
+});
+
+ipcMain.handle('bug-report:clear-screenshot', () => {
+  pendingScreenshot = null;
+  shotToken += 1;
+  previewCache = null;
+  return true;
 });
 
 // ---------------- packaged-build self check (SS_LAUNCHER_SELFTEST=1 + --launcher-selfcheck=<file>) ----------------
