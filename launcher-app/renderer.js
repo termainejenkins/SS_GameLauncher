@@ -481,30 +481,158 @@ window.onload = () => {
   // Track launcher open
   sendAnalytics('launcher_open');
 
-  // Error reporting form logic
+  // Bug report. Preview stays on this machine; Send is the only upload.
   const errorMsgInput = document.getElementById('error-message');
   const submitErrorBtn = document.getElementById('submit-error');
-  if (submitErrorBtn) {
-    submitErrorBtn.onclick = () => {
-      const msg = errorMsgInput.value.trim();
-      if (!msg) {
-        showToast('Please enter a bug description.');
-        return;
-      }
-      fetch(`${BACKEND_URL}/analytics`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event: 'user_bug_report', message: msg, timestamp: new Date().toISOString() })
-      })
-        .then(() => {
-          showToast('Thank you for your report!');
-          errorMsgInput.value = '';
-        })
-        .catch(() => {
-          showToast('Failed to submit report.');
-        });
+  const bugCategory = document.getElementById('bug-category');
+  const bugLogs = document.getElementById('bug-logs');
+  const bugSys = document.getElementById('bug-sys');
+  const bugPreview = document.getElementById('bug-preview');
+  const bugStatus = document.getElementById('bug-status');
+  const bugCount = document.getElementById('bug-desc-count');
+  const bugShot = document.getElementById('bug-shot');
+  const bugShotName = document.getElementById('bug-shot-name');
+  const bugShotClear = document.getElementById('bug-shot-clear');
+
+  function formatBytes(n) {
+    const bytes = Number(n) || 0;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  function bugOpts() {
+    return {
+      description: errorMsgInput ? errorMsgInput.value : '',
+      category: bugCategory ? bugCategory.value : 'other',
+      attachLogs: !!(bugLogs && bugLogs.checked),
+      attachSystemInfo: !!(bugSys && bugSys.checked),
     };
   }
+  function setBugStatus(message, kind) {
+    if (!bugStatus) return;
+    bugStatus.textContent = message || '';
+    bugStatus.className = `bug-status${kind ? ` ${kind}` : ''}`;
+  }
+  function updateBugCount() {
+    if (!bugCount || !errorMsgInput) return;
+    const n = errorMsgInput.value.trim().length;
+    bugCount.textContent = n < 20 ? `${n} / 2000 (at least 20)` : `${n} / 2000`;
+    bugCount.className = n > 0 && n < 20 ? 'muted bug-count warn' : 'muted bug-count';
+  }
+  function renderBugPreview(p) {
+    if (!bugPreview) return;
+    bugPreview.textContent = '';
+    if (!p || p.ok === false) {
+      bugPreview.textContent = (p && (p.error || p.message)) || 'Could not build a preview.';
+      return;
+    }
+    const list = document.createElement('ul');
+    const zip = document.createElement('li');
+    zip.textContent = `report.zip — ${formatBytes(p.zipBytes)}`;
+    list.appendChild(zip);
+    (p.zipEntries || []).forEach((f) => {
+      const li = document.createElement('li');
+      li.textContent = `  ${f.name} — ${formatBytes(f.bytes)}`;
+      list.appendChild(li);
+    });
+    if (p.screenshot) {
+      const li = document.createElement('li');
+      li.textContent = `${p.screenshot.name} — ${formatBytes(p.screenshot.bytes)}`;
+      list.appendChild(li);
+    }
+    bugPreview.appendChild(list);
+    const total = document.createElement('div');
+    total.textContent = `Total upload ${formatBytes(p.totalBytes)}`;
+    bugPreview.appendChild(total);
+    (p.notes || []).forEach((note) => {
+      const line = document.createElement('div');
+      line.textContent = note;
+      bugPreview.appendChild(line);
+    });
+    if (p.configured === false) {
+      const off = document.createElement('div');
+      off.textContent = 'Sending is off until BUG_REPORT_URL is set. Nothing will be uploaded.';
+      bugPreview.appendChild(off);
+    }
+  }
+  let bugPreviewGen = 0;
+  let bugPreviewTimer = null;
+  let bugSending = false;
+  async function refreshBugPreview() {
+    if (!window.launcher || !launcher.previewBugReport || !bugPreview) return;
+    const gen = ++bugPreviewGen;
+    try {
+      const p = await launcher.previewBugReport(bugOpts());
+      if (gen !== bugPreviewGen) return;
+      renderBugPreview(p);
+    } catch (_) {
+      if (gen === bugPreviewGen) bugPreview.textContent = 'Could not build a preview.';
+    }
+  }
+  function scheduleBugPreview() {
+    clearTimeout(bugPreviewTimer);
+    bugPreviewTimer = setTimeout(refreshBugPreview, 200);
+  }
+  if (errorMsgInput) errorMsgInput.addEventListener('input', () => { updateBugCount(); scheduleBugPreview(); });
+  if (bugCategory) bugCategory.onchange = scheduleBugPreview;
+  if (bugLogs) bugLogs.onchange = scheduleBugPreview;
+  if (bugSys) bugSys.onchange = scheduleBugPreview;
+  updateBugCount();
+  if (bugShot) {
+    bugShot.onclick = async () => {
+      if (!launcher.pickScreenshot) return;
+      const r = await launcher.pickScreenshot().catch(() => null);
+      if (!r) return;
+      if (r.error) { setBugStatus(r.error, 'bad'); return; }
+      if (r.picked) {
+        bugShotName.textContent = `${r.name} (${formatBytes(r.bytes)})`;
+        bugShotClear.hidden = false;
+        setBugStatus('', '');
+        refreshBugPreview();
+      }
+    };
+  }
+  if (bugShotClear) {
+    bugShotClear.onclick = async () => {
+      if (launcher.clearScreenshot) await launcher.clearScreenshot().catch(() => {});
+      bugShotName.textContent = '';
+      bugShotClear.hidden = true;
+      refreshBugPreview();
+    };
+  }
+  if (submitErrorBtn) {
+    submitErrorBtn.onclick = async () => {
+      if (bugSending) return;
+      const opts = bugOpts();
+      const n = opts.description.trim().length;
+      if (n < 20) { setBugStatus('Description must be at least 20 characters.', 'bad'); return; }
+      if (n > 2000) { setBugStatus('Description must be at most 2000 characters.', 'bad'); return; }
+      bugSending = true;
+      submitErrorBtn.disabled = true;
+      setBugStatus('Sending…', '');
+      try {
+        const r = await launcher.sendBugReport(opts);
+        if (r && r.ok) {
+          setBugStatus(r.message || 'Bug report sent. Thank you.', 'ok');
+          showToast(r.message || 'Bug report sent. Thank you.');
+          errorMsgInput.value = '';
+          updateBugCount();
+          if (launcher.clearScreenshot) await launcher.clearScreenshot().catch(() => {});
+          bugShotName.textContent = '';
+          bugShotClear.hidden = true;
+        } else {
+          setBugStatus((r && r.message) || 'Could not send the bug report.', 'bad');
+        }
+      } catch (_) {
+        setBugStatus('Could not send the bug report.', 'bad');
+      } finally {
+        bugSending = false;
+        submitErrorBtn.disabled = false;
+        refreshBugPreview();
+      }
+    };
+  }
+  refreshBugPreview();
 
   // Web game embedding logic
   const webgameModal = document.getElementById('webgame-modal');

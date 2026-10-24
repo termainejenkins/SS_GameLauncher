@@ -37,4 +37,10 @@ contextBridge.exposeInMainWorld('launcher', {
   onDownloadProgress: (cb) => on('download:progress', cb),
   onDownloadComplete: (cb) => on('download:complete', cb),
   onDownloadError: (cb) => on('download:error', cb),
+
+  // Bug report. The page never sees log paths or the raw install id; main.js collects and uploads.
+  previewBugReport: (opts) => ipcRenderer.invoke('bug-report:preview', opts || {}),
+  sendBugReport: (opts) => ipcRenderer.invoke('bug-report:send', opts || {}),
+  pickScreenshot: () => ipcRenderer.invoke('bug-report:pick-screenshot'),
+  clearScreenshot: () => ipcRenderer.invoke('bug-report:clear-screenshot'),
 });

@@ -378,7 +378,22 @@ body.theme-light .badge-demo, body.theme-light .chip { color: #a5641a; }
 #download-status { margin-top: 7px; font-size: 12.5px; color: var(--muted); white-space: pre-line; word-break: break-all; }
 
 /* ---------- bug report ---------- */
-#error-message { width: 100%; resize: vertical; min-height: 70px; margin: 10px 0; }
+.bug-report-lead { font-size: 13px; margin: 4px 0 0; }
+.bug-label { display: block; margin: 12px 0 4px; font-size: 13px; font-weight: 600; }
+.bug-report select.input, .bug-report textarea.input { width: 100%; box-sizing: border-box; }
+.bug-report textarea.input { resize: vertical; min-height: 96px; }
+.bug-count { font-size: 12px; margin-top: 4px; }
+.bug-count.warn { color: var(--orange-hi); }
+.bug-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.bug-check { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; cursor: pointer; }
+.bug-check input { accent-color: var(--orange); }
+.bug-consent { font-size: 12.5px; line-height: 1.45; color: var(--muted); margin: 12px 0; }
+.bug-preview { font-size: 12.5px; line-height: 1.45; background: rgba(10, 7, 4, .35); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 0 0 12px; word-break: break-word; }
+body.theme-light .bug-preview { background: rgba(255, 250, 240, .8); }
+.bug-preview ul { margin: 6px 0 6px 18px; padding: 0; }
+.bug-status { min-height: 1.2em; font-size: 13px; margin: 8px 0 0; }
+.bug-status.ok { color: var(--acacia); }
+.bug-status.bad { color: var(--orange-hi); }
 
 /* ---------- toast ---------- */
 #toast {

@@ -8,7 +8,7 @@
     "smoke": "electron scripts/smoke-electron.js",
     "smoke:steam": "electron scripts/smoke-steam.js",
     "screenshots": "electron scripts/screenshots.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test bug-report.test.js",
     "dist": "electron-builder --win dir --x64 --publish never",
     "dist:check": "node scripts/check-dist.js",
     "dist:installer": "node scripts/build-installer.js"
@@ -136,6 +136,7 @@
       "renderer.js",
       "account.js",
       "config.js",
+      "bug-report.js",
       "game-launch.js",
       "steam-ticket-worker.js",
       "index.html",

@@ -1,0 +1,17 @@
+{
+  "rules": [
+    {
+      "id": "expire-bug-reports-90d",
+      "enabled": true,
+      "conditions": {
+        "prefix": "reports/"
+      },
+      "deleteObjectsTransition": {
+        "condition": {
+          "type": "Age",
+          "maxAge": 7776000
+        }
+      }
+    }
+  ]
+}

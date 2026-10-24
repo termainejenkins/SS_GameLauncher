@@ -1,0 +1,34 @@
+# Bug-report intake. Placeholder binding names only.
+# Do not put an account_id, API token, or DISCORD_WEBHOOK_URL in this file.
+# The R2 bucket must stay private: do not enable r2.dev or a public custom domain.
+name = "tgc-bug-report"
+main = "src/index.js"
+compatibility_date = "2026-10-24"
+compatibility_flags = [ "nodejs_compat" ]
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+
+# Daily cleanup of report prefixes older than 90 days. The R2 lifecycle rule is the real retention guarantee.
+[triggers]
+crons = [ "15 4 * * *" ]
+
+[[r2_buckets]]
+binding = "BUGS"
+bucket_name = "tgc-bug-reports"
+preview_bucket_name = "tgc-bug-reports-preview"
+
+# TODO(TJ): replace both ids with the output of `npx wrangler kv namespace create RATE`
+# (and `npx wrangler kv namespace create RATE --preview`). These zeros are not a real namespace.
+[[kv_namespaces]]
+binding = "RATE"
+id = "00000000000000000000000000000000"
+preview_id = "00000000000000000000000000000000"

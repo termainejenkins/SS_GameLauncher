@@ -16,4 +16,8 @@ Created by Termaine Jenkins (aka TJ, SENTIENT SOLUTIONS LLC)
 - Added version comparison and update prompt for game updates.
 - Enhanced news feed to support images, links, and HTML formatting in news items.
 - Added analytics/event tracking with user consent (launcher open, game launch, errors).
-- Added in-app bug report form for user-submitted error reports. 
+- Added in-app bug report form for user-submitted error reports.
+
+### 2026-10-24
+- Replaced the local analytics bug box with an opt-in Report a bug flow: preview, scrubbed logs and system info, 25 MB zip, upload only after Send.
+- Added `bug-report-worker/` (validate, KV rate limit, private R2, Discord note). Not deployed. No version bump. 

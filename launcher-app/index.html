@@ -39,7 +39,7 @@
       </button>
       <button data-scroll="error-report">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>
-        Support
+        Report a bug
       </button>
     </nav>
 
@@ -163,11 +163,30 @@
           <div id="news-list" class="muted">Loading news...</div>
         </section>
 
-        <section id="error-report" class="card">
+        <section id="error-report" class="card bug-report">
           <h3>Report a bug</h3>
-          <div class="muted" style="font-size:13px; margin-top:4px;">Tell us what happened. Include what you were doing and what you expected.</div>
-          <textarea id="error-message" class="input" rows="3" placeholder="Describe the problem..."></textarea>
-          <button id="submit-error" class="btn btn-primary btn-sm">Submit report</button>
+          <p class="muted bug-report-lead">Tell us what happened. Nothing is sent until you press Send.</p>
+          <label class="bug-label" for="bug-category">Category</label>
+          <select id="bug-category" class="input">
+            <option value="crash">Crash</option>
+            <option value="performance">Performance</option>
+            <option value="gameplay">Gameplay</option>
+            <option value="other">Other</option>
+          </select>
+          <label class="bug-label" for="error-message">Description</label>
+          <textarea id="error-message" class="input" rows="5" maxlength="2000" placeholder="What happened, what you expected, and what you were doing (at least 20 characters)."></textarea>
+          <div id="bug-desc-count" class="muted bug-count">0 / 2000</div>
+          <div class="bug-row">
+            <button type="button" id="bug-shot" class="btn btn-sm">Add screenshot</button>
+            <span id="bug-shot-name" class="muted"></span>
+            <button type="button" id="bug-shot-clear" class="btn btn-sm btn-ghost" hidden>Remove</button>
+          </div>
+          <label class="bug-check"><input type="checkbox" id="bug-logs" checked> Attach logs</label>
+          <label class="bug-check"><input type="checkbox" id="bug-sys" checked> Attach system info</label>
+          <p class="bug-consent">Sent only if you press Send: your description, the files listed below, and a one-way hash of this install. Used only to fix bugs.</p>
+          <div id="bug-preview" class="bug-preview muted">Preparing a preview…</div>
+          <button type="button" id="submit-error" class="btn btn-primary btn-sm">Send</button>
+          <p id="bug-status" class="bug-status" role="status"></p>
         </section>
       </div>
 

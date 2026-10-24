@@ -1,0 +1,14 @@
+{
+  "name": "tgc-bug-report-worker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  },
+  "description": "Private bug-report intake for the SS Game Launcher. Not deployed from this repo."
+}

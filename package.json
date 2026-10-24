@@ -2,7 +2,8 @@
   "name": "ss_game_launcher_root",
   "private": true,
   "scripts": {
-    "start": "concurrently \"npm run dev --prefix backend\" \"npm start --prefix launcher-app\""
+    "start": "concurrently \"npm run dev --prefix backend\" \"npm start --prefix launcher-app\"",
+    "test": "npm test --prefix launcher-app && npm test --prefix bug-report-worker"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

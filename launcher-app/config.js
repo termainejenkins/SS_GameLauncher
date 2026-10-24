@@ -31,4 +31,16 @@ module.exports = Object.freeze({
 
   // Local news/updates backend (backend/src/index.ts).
   BACKEND_URL: 'http://localhost:3000',
+
+  // TODO(TJ): Confirm this folder name on a real install before relying on log attachment.
+  // Unreal writes logs to %LOCALAPPDATA%\<GAME_SAVED_PROJECT_DIR>\Saved\Logs\TGC.log
+  // and crashes to %LOCALAPPDATA%\<GAME_SAVED_PROJECT_DIR>\Saved\Crashes\<folder>\.
+  // This is NOT the entitlement directory (SentientSolutions\TGC). The name below is a
+  // placeholder (the shipping exe is TheGreatCircle*.exe). It may actually be
+  // TheGreatCircle_4_27 or something else on TJ's machine — check LocalAppData and update this one constant.
+  GAME_SAVED_PROJECT_DIR: 'TheGreatCircle',
+
+  // TODO(TJ): Replace with the deployed Worker URL (https://<worker>/api/bug-report) before any report can be sent.
+  // The .invalid host is a placeholder on purpose: the launcher refuses to upload until this is a real https URL.
+  BUG_REPORT_URL: 'https://bug-report.example.invalid/api/bug-report',
 });
