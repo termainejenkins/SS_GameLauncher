@@ -446,25 +446,33 @@ test('install id is a random uuid stored locally and only the sha256 is for uplo
   }
 });
 
-test('placeholder URL sends nothing', async () => {
+test('unset or placeholder URL sends nothing', async () => {
+  const deployed = 'https://tgc-bug-report.sentientsolutions.workers.dev/api/bug-report';
+  assert.equal(cfg.BUG_REPORT_URL, deployed);
+  assert.equal(bug.isBugReportConfigured(cfg.BUG_REPORT_URL), true);
+  assert.equal(bug.isBugReportConfigured(''), false);
+  assert.equal(bug.isBugReportConfigured(undefined), false);
+  assert.equal(bug.isBugReportConfigured(bug.BUG_REPORT_URL_PLACEHOLDER), false);
+
   let called = false;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-bug-url-'));
   try {
-    const result = await bug.sendBugReport({
-      description: 'x'.repeat(30),
-      category: 'gameplay',
-      attachLogs: false,
-      attachSystemInfo: false,
-      uploadUrl: cfg.BUG_REPORT_URL,
-      settingsPath: path.join(dir, 'id.json'),
-      postImpl() { called = true; throw new Error('should not post'); },
-    });
-    assert.equal(called, false);
-    assert.equal(result.ok, false);
-    assert.equal(result.code, 'not_configured');
-    assert.match(result.message, /nothing was sent/i);
-    assert.equal(bug.isBugReportConfigured(cfg.BUG_REPORT_URL), false);
-    assert.equal(cfg.BUG_REPORT_URL, bug.BUG_REPORT_URL_PLACEHOLDER);
+    for (const uploadUrl of ['', undefined, bug.BUG_REPORT_URL_PLACEHOLDER]) {
+      called = false;
+      const result = await bug.sendBugReport({
+        description: 'x'.repeat(30),
+        category: 'gameplay',
+        attachLogs: false,
+        attachSystemInfo: false,
+        uploadUrl,
+        settingsPath: path.join(dir, 'id.json'),
+        postImpl() { called = true; throw new Error('should not post'); },
+      });
+      assert.equal(called, false);
+      assert.equal(result.ok, false);
+      assert.equal(result.code, 'not_configured');
+      assert.match(result.message, /nothing was sent/i);
+    }
     assert.equal(cfg.GAME_SAVED_PROJECT_DIR, 'TheGreatCircle_4_27');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

@@ -30,7 +30,7 @@ The Windows user name is replaced with `<user>` in paths inside text files, in s
 
 The install id is a random UUID in the launcher's settings file. Only its SHA-256 hash is uploaded, and only as the rate-limit key. It is not written into the R2 metadata.
 
-`BUG_REPORT_URL` in `launcher-app/config.js` is a `.invalid` placeholder. Send refuses to open a connection until that constant is a real `https://` URL.
+The Worker is deployed at `https://tgc-bug-report.sentientsolutions.workers.dev/api/bug-report`. `BUG_REPORT_URL` in `launcher-app/config.js` is that URL. If the constant is unset, Send refuses to open a connection and nothing is uploaded.
 
 ## Where it lands
 
@@ -65,7 +65,7 @@ Do this from `bug-report-worker/` after `npx wrangler@4 login`. Do not put the w
    ```sh
    npx wrangler@4 deploy
    ```
-6. Set `BUG_REPORT_URL` in `launcher-app/config.js` to `https://<worker-host>/api/bug-report`.
+6. Point the launcher at the Worker. This is already done: `BUG_REPORT_URL` in `launcher-app/config.js` is `https://tgc-bug-report.sentientsolutions.workers.dev/api/bug-report`.
 
 Optional: `npx wrangler@4 secret put RATE_LIMIT_SALT` adds a pepper so a copy of the KV namespace cannot be matched back to an IP. The Worker runs without it.
 
@@ -81,7 +81,6 @@ That runs `node --test bug-report.test.js` in `launcher-app/` and Vitest in `bug
 
 ## Still TODO
 
-- Set `BUG_REPORT_URL` to the deployed Worker. Until then Send does not upload.
 - Create the private Discord channel and webhook, then `wrangler secret put DISCORD_WEBHOOK_URL`.
 - Create the R2 bucket and KV namespace, apply the lifecycle rule, replace the placeholder KV ids, and deploy. Do not enable public read on the bucket.
 - Optional: add `gameBuild` and `gameBranch` to `launcher-config.json` beside the game. If they are absent, the launcher uses a `LogInit: Build:` line from the game log when it can see that file.

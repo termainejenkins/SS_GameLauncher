@@ -37,7 +37,7 @@ module.exports = Object.freeze({
   // This is not the entitlement directory (SentientSolutions\TGC). A 5.8 build may rename this folder.
   GAME_SAVED_PROJECT_DIR: 'TheGreatCircle_4_27',
 
-  // TODO(TJ): Replace with the deployed Worker URL (https://<worker>/api/bug-report) before any report can be sent.
-  // The .invalid host is a placeholder on purpose: the launcher refuses to upload until this is a real https URL.
-  BUG_REPORT_URL: 'https://bug-report.example.invalid/api/bug-report',
+  // Deployed bug-report Worker. One constant. If this is unset (empty) or the
+  // .invalid placeholder, the launcher sends nothing.
+  BUG_REPORT_URL: 'https://tgc-bug-report.sentientsolutions.workers.dev/api/bug-report',
 });
