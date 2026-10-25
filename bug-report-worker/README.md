@@ -16,13 +16,14 @@ The Worker is deployed at `https://tgc-bug-report.sentientsolutions.workers.dev/
 | `zip` | yes | ZIP file, magic bytes `PK\x03\x04`, at most 25 MB |
 | `screenshot` | no | PNG or JPG, at most 8 MB |
 | `launcherVersion`, `gameBuild`, `gpu` | no | Stored and shown in Discord, clipped to 200 characters |
+| `entitlementToken` | no | Signed entitlement token, when the launcher has one. If it verifies, is unexpired, and includes `developer`, the stored JSON gets `"developer": true` and the Discord note starts with `[DEV]`. A missing, bad, or expired token is ignored. The report is still accepted. The token is not stored or logged. |
 
-Anything else is a 4xx. The body cap is 25 MB plus the 8 MB screenshot allowance plus 256 KB of multipart overhead. Over that, the response is **413**. Over the daily rate limit, the response is **429** with `Retry-After` (seconds until the next UTC day).
+A bad field value is a 4xx. An unknown extra field is ignored. The body cap is 25 MB plus the 8 MB screenshot allowance plus 256 KB of multipart overhead. Over that, the response is **413**. Over the daily rate limit, the response is **429** with `Retry-After` (seconds until the next UTC day).
 
 A valid report is stored at:
 
 - `reports/<YYYY-MM-DD>/<id>.zip`
-- `reports/<YYYY-MM-DD>/<id>.json` — category, game build, GPU, description, launcher version, createdAt, report id, and `hasScreenshot`. No IP and no install-id hash.
+- `reports/<YYYY-MM-DD>/<id>.json` — category, game build, GPU, description, launcher version, createdAt, report id, and `hasScreenshot`. `"developer": true` when the entitlement token verified as a developer. No IP, no install-id hash, and no entitlement token.
 - `reports/<YYYY-MM-DD>/<id>.png` or `.jpg` when a screenshot was attached
 
 Discord gets category, game build, GPU, launcher version, the first 200 characters of the description, and the report id. `@everyone` and `@here` are broken up, and the webhook is called with `allowed_mentions: { parse: [] }`. If Discord errors, the R2 objects stay and the player still gets a success response.

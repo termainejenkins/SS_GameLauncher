@@ -30,11 +30,13 @@ The Windows user name is replaced with `<user>` in paths inside text files, in s
 
 The install id is a random UUID in the launcher's settings file. Only its SHA-256 hash is uploaded, and only as the rate-limit key. It is not written into the R2 metadata.
 
+If this PC has an entitlement token, Send also posts that signed token as `entitlementToken`. Branch passwords are not sent. The Worker checks the signature and expiry. A valid token whose entitlements include `developer` tags the stored JSON with `"developer": true` and prefixes the Discord note with `[DEV]`. A missing, bad, or expired token does not reject the report and does not tag it. The token is not written to R2 or the logs.
+
 The Worker is deployed at `https://tgc-bug-report.sentientsolutions.workers.dev/api/bug-report`. `BUG_REPORT_URL` in `launcher-app/config.js` is that URL. If the constant is unset, Send refuses to open a connection and nothing is uploaded.
 
 ## Where it lands
 
-The Worker (`bug-report-worker/`) stores the zip at `reports/<YYYY-MM-DD>/<id>.zip` plus `<id>.json` in a private R2 bucket, then posts a short note to Discord (category, game build, GPU, first 200 characters of the description, report id). A Discord failure does not delete the stored report. `@everyone` and `@here` cannot ping the channel.
+The Worker (`bug-report-worker/`) stores the zip at `reports/<YYYY-MM-DD>/<id>.zip` plus `<id>.json` in a private R2 bucket, then posts a short note to Discord (category, game build, GPU, first 200 characters of the description, report id). A verified developer token adds `"developer": true` on the JSON and `[DEV]` on the Discord note. A Discord failure does not delete the stored report. `@everyone` and `@here` cannot ping the channel.
 
 Rate limit: 5 reports per install-id hash per UTC day, and 20 per daily-salted IP hash. The raw IP is not stored or logged. See the Worker README for why this uses KV rather than a Durable Object.
 

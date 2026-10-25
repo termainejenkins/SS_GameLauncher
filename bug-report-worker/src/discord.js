@@ -5,10 +5,10 @@ export function neutralizeMentions(text) {
     .replace(/<@[&!]?\d+>/g, '[mention]');
 }
 
-export function discordPayload({ category, gameBuild, gpu, description, reportId, launcherVersion }) {
+export function discordPayload({ category, gameBuild, gpu, description, reportId, launcherVersion, developer }) {
   const desc = neutralizeMentions(description).slice(0, 200);
   const content = [
-    `Bug report ${reportId}`,
+    `${developer ? '[DEV] ' : ''}Bug report ${reportId}`,
     `Category: ${neutralizeMentions(category)}`,
     `Game build: ${neutralizeMentions(gameBuild || 'unknown')}`,
     `GPU: ${neutralizeMentions(gpu || 'unknown')}`,

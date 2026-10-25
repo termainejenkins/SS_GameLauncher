@@ -215,6 +215,15 @@ function createAccountManager({ app, safeStorage, shell, utilityProcess, isSteam
     try { fs.unlinkSync(fetchMetaFile()); } catch (_) { /* not there */ }
   }
 
+  /** Current entitlement token for a bug report, or '' if this PC has none. Not a developer check. */
+  function entitlementTokenForReport() {
+    const token = readEntitlementFile();
+    if (typeof token !== 'string') return '';
+    const value = token.trim();
+    if (!value || value.length > 16384) return '';
+    return value;
+  }
+
   /** Developer gate for this process. Cached token with no matching server fetch is false. */
   function isDeveloperNow(now = Date.now()) {
     const token = readEntitlementFile();
@@ -537,7 +546,7 @@ function createAccountManager({ app, safeStorage, shell, utilityProcess, isSteam
 
   return {
     getStatus, linkDiscord, cancelLink, refreshBeforePlay, waitForSteamWorkers, fetchBranches,
-    isDeveloper: isDeveloperNow, refreshDeveloperIfStale,
+    isDeveloper: isDeveloperNow, refreshDeveloperIfStale, entitlementTokenForReport,
   };
 }
 

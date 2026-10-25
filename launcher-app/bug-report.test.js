@@ -566,6 +566,59 @@ test('screenshot magic and size cap', () => {
   assert.equal(bug.SCREENSHOT_MAX_BYTES, 8 * 1024 * 1024);
 });
 
+test('bug report sends entitlementToken when present and never a branch password', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-bug-token-'));
+  const settings = path.join(dir, 'id.json');
+  bug.loadOrCreateInstallId(settings);
+  const token = 'eyJwYXlsb2FkIjoidGVzdCJ9.c2lnbmF0dXJl';
+  const password = 'BRANCH-PASSWORD-SENTINEL';
+  const base = {
+    description: 'The zebra clipped through the camp at dusk.',
+    category: 'gameplay',
+    attachLogs: false,
+    attachSystemInfo: false,
+    uploadUrl: 'https://reports.example.com/api/bug-report',
+    settingsPath: settings,
+    password,
+    branchPassword: password,
+    branches: [{ branch: 'beta', password }],
+  };
+  async function capture(extra) {
+    let body = '';
+    const result = await bug.sendBugReport({
+      ...base,
+      ...extra,
+      postImpl(_url, req) {
+        body = req.body.toString('utf8');
+        return { status: 201, headers: {}, text: '{"id":"r1"}' };
+      },
+    });
+    return { result, body };
+  }
+  try {
+    assert.equal(bug.entitlementTokenField(`a.b\n${password}`), '');
+    const sent = await capture({ entitlementToken: `  ${token}  ` });
+    assert.equal(sent.result.ok, true, sent.result.message);
+    assert.equal(sent.body.includes('name="entitlementToken"'), true);
+    assert.equal(sent.body.includes(token), true);
+    assert.equal(sent.body.includes(password), false);
+    assert.equal(sent.body.includes('name="password"'), false);
+    assert.equal(sent.body.includes('name="branchPassword"'), false);
+
+    const omitted = await capture({ entitlementToken: '' });
+    assert.equal(omitted.result.ok, true);
+    assert.equal(omitted.body.includes('entitlementToken'), false);
+    assert.equal(omitted.body.includes(password), false);
+
+    const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+    const send = main.slice(main.indexOf("ipcMain.handle('bug-report:send'"), main.indexOf("ipcMain.handle('bug-report:pick-screenshot'"));
+    assert.match(send, /entitlementTokenForReport\(\)/);
+    assert.equal(send.includes('branchPasswords'), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('launcher page has the report form fields', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   assert.match(html, /Report a bug/);

@@ -1,3 +1,4 @@
+import nodeCrypto from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import worker, { handleRequest } from '../src/index.js';
 import { MAX_BODY_BYTES, SCREENSHOT_MAX_BYTES, ZIP_MAX_BYTES } from '../src/limits.js';
@@ -370,6 +371,96 @@ describe('discord payload', () => {
     expect(payload.allowed_mentions).toEqual({ parse: [] });
     expect(payload.content.includes('TAIL')).toBe(false);
     expect(payload.content.includes('z'.repeat(200))).toBe(true);
+  });
+});
+
+const { publicKey, privateKey } = nodeCrypto.generateKeyPairSync('ed25519');
+const entitlementPubHex = publicKey.export({ format: 'der', type: 'spki' }).subarray(12).toString('hex');
+const nowSec = Math.floor(NOW.getTime() / 1000);
+
+function signEntitlement(payload, key = privateKey) {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = nodeCrypto.sign(null, Buffer.from(body, 'ascii'), key).toString('base64url');
+  return `${body}.${sig}`;
+}
+
+function entitlementPayload(entitlements, exp) {
+  return {
+    v: 1,
+    steamid: '76561198000000000',
+    discord_id: '42',
+    steam_app: 1865070,
+    owns_full_game: false,
+    tier: 0,
+    tier_name: 'None',
+    entitlements,
+    iat: nowSec,
+    exp,
+  };
+}
+
+describe('developer tag', () => {
+  const devToken = signEntitlement(entitlementPayload(['developer'], nowSec + 86400));
+  const fanToken = signEntitlement(entitlementPayload(['supporter'], nowSec + 86400));
+
+  async function tagged(fields) {
+    const env = testEnv({ ENTITLEMENT_PUBLIC_KEY_HEX: entitlementPubHex });
+    const { calls, logs } = stubDiscord();
+    const res = await submit(env, fields);
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    const raw = env.BUGS.objects.get(`reports/2026-10-24/${body.id}.json`).body.toString('utf8');
+    const meta = JSON.parse(raw);
+    const note = JSON.parse(calls[0].init.body).content;
+    return { env, meta, raw, note, logs, calls };
+  }
+
+  it('valid dev token tags the stored json and the Discord note', async () => {
+    const { meta, note } = await tagged(baseFields({ entitlementToken: devToken }));
+    expect(meta.developer).toBe(true);
+    expect(note.startsWith('[DEV] Bug report ')).toBe(true);
+  });
+
+  it('non-dev token does not tag', async () => {
+    const { meta, note } = await tagged(baseFields({ entitlementToken: fanToken }));
+    expect(meta.developer).toBeUndefined();
+    expect(note.includes('[DEV]')).toBe(false);
+  });
+
+  it('bad signature does not tag', async () => {
+    const [body, sig] = devToken.split('.');
+    // Flip the first character. The last one is mostly unused padding and can still verify.
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const flipped = alphabet[(alphabet.indexOf(sig[0]) + 1) % alphabet.length] + sig.slice(1);
+    const { meta, note } = await tagged(baseFields({ entitlementToken: `${body}.${flipped}` }));
+    expect(meta.developer).toBeUndefined();
+    expect(note.includes('[DEV]')).toBe(false);
+  });
+
+  it('expired token does not tag', async () => {
+    const expired = signEntitlement(entitlementPayload(['developer'], nowSec - 5));
+    const { meta, note } = await tagged(baseFields({ entitlementToken: expired }));
+    expect(meta.developer).toBeUndefined();
+    expect(note.includes('[DEV]')).toBe(false);
+  });
+
+  it('missing token does not tag', async () => {
+    const { meta, note } = await tagged(baseFields());
+    expect(meta.developer).toBeUndefined();
+    expect(note.includes('[DEV]')).toBe(false);
+  });
+
+  it('does not persist the token in the stored json', async () => {
+    const { meta, raw, note, logs, env } = await tagged(baseFields({ entitlementToken: devToken }));
+    expect(meta.developer).toBe(true);
+    expect(meta.entitlementToken).toBeUndefined();
+    expect(raw.includes(devToken)).toBe(false);
+    expect(raw.includes('entitlementToken')).toBe(false);
+    const stored = [...env.BUGS.objects.values()].map((o) => o.body.toString('utf8')).join('\n');
+    expect(stored.includes(devToken)).toBe(false);
+    expect(note.includes(devToken)).toBe(false);
+    expect(logs.join('\n').includes(devToken)).toBe(false);
+    expect(logs.join('\n').includes('entitlementToken')).toBe(false);
   });
 });
 
