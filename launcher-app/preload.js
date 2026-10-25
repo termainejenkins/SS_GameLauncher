@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld('launcher', {
   getBranches: () => ipcRenderer.invoke('account:branches'),
   copyBranchPassword: (branch) => ipcRenderer.invoke('account:copy-branch-password', String(branch)),
 
+  // Debug console. Main decides; hiding the switch here is not the check.
+  getDevStatus: () => ipcRenderer.invoke('dev:status'),
+  toggleDebugConsole: (open) => ipcRenderer.invoke('dev:toggle-console', !!open),
+
   // Launcher self-update (website install only; the Steam copy is updated by Steam)
   getUpdateStatus: () => ipcRenderer.invoke('updater:status'),
   installUpdate: () => ipcRenderer.invoke('updater:install'),

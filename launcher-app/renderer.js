@@ -469,6 +469,32 @@ window.onload = () => {
   analyticsToggle.onchange = () => setAnalytics(analyticsToggle.checked);
   setAnalytics(isAnalyticsEnabled());
 
+  // Debug console. Hidden unless main says this account is a developer. The switch is cosmetic;
+  // dev:toggle-console in the main process is what opens DevTools, and it refuses otherwise.
+  const debugRow = document.getElementById('debug-console-row');
+  const debugToggle = document.getElementById('debug-console-toggle');
+  async function applyDevStatus() {
+    let st = null;
+    try { st = await launcher.getDevStatus(); } catch (_) { st = null; }
+    const developer = !!(st && st.developer);
+    if (debugRow) debugRow.hidden = !developer;
+    if (debugToggle && !developer) debugToggle.checked = false;
+  }
+  if (debugToggle) {
+    debugToggle.addEventListener('change', async () => {
+      const want = debugToggle.checked;
+      let result = null;
+      try { result = await launcher.toggleDebugConsole(want); } catch (_) { result = null; }
+      if (!result || !result.ok) {
+        debugToggle.checked = false;
+        if (debugRow) debugRow.hidden = true;
+        return;
+      }
+      debugToggle.checked = !!result.open;
+    });
+  }
+  applyDevStatus();
+
   function sendAnalytics(event, data = {}) {
     if (!isAnalyticsEnabled()) return;
     fetch(`${BACKEND_URL}/analytics`, {

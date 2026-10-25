@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const cfg = require('./config');
 const { createAccountManager } = require('./account');
+const { handleDebugConsoleToggle } = require('./dev-access');
 const launch = require('./game-launch');
 const updater = require('./updater');
 const bugReport = require('./bug-report');
@@ -80,6 +81,12 @@ function createWindow() {
       e.preventDefault();
       if (isAllowedExternal(url)) shell.openExternal(url);
     }
+  });
+
+  // Menu / F12 can open DevTools without the IPC handler. Close them unless the signed grant says developer.
+  mainWindow.webContents.on('devtools-opened', () => {
+    if (account.isDeveloper()) return;
+    try { mainWindow.webContents.closeDevTools(); } catch (_) { /* ignore */ }
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
@@ -230,6 +237,35 @@ ipcMain.handle('account:cancel-link', () => {
   account.cancelLink();
   return true;
 });
+
+// ---------------- developer tools (signed "developer" entitlement, fresh server fetch) ----------------
+// The page can hide the switch. These handlers are what actually allow the console.
+
+function closeDevTools() {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  try {
+    if (mainWindow.webContents.isDevToolsOpened()) mainWindow.webContents.closeDevTools();
+  } catch (_) { /* ignore */ }
+  return false;
+}
+
+ipcMain.handle('dev:status', async () => {
+  // Lightweight /entitlements refresh when the dev UI is opened and the last fetch is stale.
+  const developer = await account.refreshDeveloperIfStale();
+  if (!developer) closeDevTools();
+  return { developer: !!developer };
+});
+
+ipcMain.handle('dev:toggle-console', (_event, open) => handleDebugConsoleToggle({
+  isDeveloperFn: () => account.refreshDeveloperIfStale(),
+  open,
+  applyOpen: (want) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    if (want) mainWindow.webContents.openDevTools({ mode: 'detach' });
+    else mainWindow.webContents.closeDevTools();
+    return !!mainWindow.webContents.isDevToolsOpened();
+  },
+}));
 
 // ---------------- Steam test-branch passwords ----------------
 // Held in memory only for the copy button; never written to disk or logged. Cleared on every fetch and on quit.
