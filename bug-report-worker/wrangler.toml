@@ -20,7 +20,7 @@ enabled = true
 head_sampling_rate = 1
 
 [observability.traces]
-enabled = true
+enabled = false
 head_sampling_rate = 1
 
 # Daily cleanup of report prefixes older than 90 days. The R2 lifecycle rule is the real retention guarantee.
@@ -32,9 +32,9 @@ binding = "BUGS"
 bucket_name = "tgc-bug-reports"
 preview_bucket_name = "tgc-bug-reports-preview"
 
-# TODO(TJ): replace both ids with the output of `npx wrangler kv namespace create RATE`
-# (and `npx wrangler kv namespace create RATE --preview`). These zeros are not a real namespace.
+# Production id is the live RATE namespace. Not a secret.
+# preview_id is still a placeholder until `npx wrangler kv namespace create RATE --preview`.
 [[kv_namespaces]]
 binding = "RATE"
-id = "00000000000000000000000000000000"
+id = "bb566c4909254ceb831e235bf40476d9"
 preview_id = "00000000000000000000000000000000"
