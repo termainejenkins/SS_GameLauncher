@@ -6,6 +6,12 @@ main = "src/index.js"
 compatibility_date = "2026-10-24"
 compatibility_flags = [ "nodejs_compat" ]
 
+# Ed25519 public key (raw 32 bytes, hex). Same value as launcher-app/config.js
+# ENTITLEMENT_PUBLIC_KEY_HEX. Not a secret. Used only to tag a report when the
+# signed token includes "developer". A bad or missing token does not reject the report.
+[vars]
+ENTITLEMENT_PUBLIC_KEY_HEX = "91bd847131a2280632b310af9956bdd3e293c01179c86cace37d4460dcfc8525"
+
 [observability]
 enabled = true
 

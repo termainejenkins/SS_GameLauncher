@@ -2,6 +2,7 @@ import { MAX_BODY_BYTES } from './limits.js';
 import { contentLengthTooBig, isMultipart, json, validateReport } from './validate.js';
 import { commitRate, peekRate, rateKeys, retryAfterSeconds } from './rate-limit.js';
 import { discordPayload, notifyDiscord, safeError } from './discord.js';
+import { developerFromToken } from './entitlement.js';
 import { runRetention } from './retention.js';
 
 function clientIp(request) {
@@ -40,6 +41,16 @@ export async function handleRequest(request, env, _ctx, deps = {}) {
   const report = validated.report;
 
   const now = (deps.now || (() => new Date()))();
+  // Optional. A bad, expired, or missing token leaves the report untagged. Never store the token.
+  let developer = false;
+  try {
+    const raw = form.get('entitlementToken');
+    if (typeof raw === 'string' && raw.trim()) {
+      developer = await developerFromToken(raw, env.ENTITLEMENT_PUBLIC_KEY_HEX, Math.floor(now.getTime() / 1000));
+    }
+  } catch (_) {
+    developer = false;
+  }
   const keys = await rateKeys(env.RATE, env, { installId: report.installId, ip: clientIp(request), now });
   const gate = await peekRate(env.RATE, keys);
   if (!gate.ok) {
@@ -65,6 +76,7 @@ export async function handleRequest(request, env, _ctx, deps = {}) {
     reportId,
     hasScreenshot: !!report.screenshot,
   };
+  if (developer) meta.developer = true;
 
   try {
     await env.BUGS.put(zipKey, report.zipBytes, { httpMetadata: { contentType: 'application/zip' } });
@@ -96,6 +108,7 @@ export async function handleRequest(request, env, _ctx, deps = {}) {
       description: report.description,
       reportId,
       launcherVersion: report.launcherVersion,
+      developer,
     });
     const note = await notifyDiscord(env.DISCORD_WEBHOOK_URL, payload);
     discordNotified = !!note.ok;

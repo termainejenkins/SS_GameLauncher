@@ -449,7 +449,13 @@ ipcMain.handle('bug-report:send', async (_event, opts) => {
   try {
     previewCache = null;
     const gpu = await bugReportGpu();
-    const result = await bugReport.sendBugReport(bugReportOptions({ ...bugReportFlags(opts), gpu }));
+    // The signed entitlement token, when this PC has one. Branch passwords are not part of this request.
+    const entitlementToken = account.entitlementTokenForReport();
+    const result = await bugReport.sendBugReport(bugReportOptions({
+      ...bugReportFlags(opts),
+      gpu,
+      ...(entitlementToken ? { entitlementToken } : {}),
+    }));
     if (result && result.ok) {
       pendingScreenshot = null;
       shotToken += 1;

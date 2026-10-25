@@ -765,6 +765,13 @@ function prepareBugReport(options = {}) {
   };
 }
 
+function entitlementTokenField(token) {
+  if (typeof token !== 'string') return '';
+  const value = token.trim();
+  if (!value || value.length > 16384 || /[\r\n"]/.test(value)) return '';
+  return value;
+}
+
 function buildMultipartBody({ fields, files, boundary }) {
   const b = boundary || `----TgcBugReport${crypto.randomBytes(12).toString('hex')}`;
   const chunks = [];
@@ -882,6 +889,9 @@ async function sendBugReport(options = {}) {
     gameBuild: prepared.gameBuild || '',
     gpu: prepared.gpu || '',
   };
+  // Signed entitlement token only, and only when this PC has one. Never a branch password.
+  const entitlementToken = entitlementTokenField(options.entitlementToken);
+  if (entitlementToken) fields.entitlementToken = entitlementToken;
   const files = [{ field: 'zip', filename: 'report.zip', contentType: 'application/zip', data: prepared.zip }];
   if (prepared.screenshotFile) {
     files.push({
@@ -935,6 +945,7 @@ module.exports = {
   readZipEntries,
   prepareBugReport,
   buildMultipartBody,
+  entitlementTokenField,
   interpretUploadResponse,
   sendBugReport,
 };
