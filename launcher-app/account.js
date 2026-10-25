@@ -70,6 +70,30 @@ function tierFromPayload(payload) {
   return { tier: t, tierName: name };
 }
 
+// Dev features follow the signed "developer" entitlement, and only while the token
+// was fetched from /entitlements less than 15 minutes ago. A file on disk is not enough.
+const DEVELOPER_ENTITLEMENT = 'developer';
+const DEVELOPER_FRESH_MS = 15 * 60 * 1000;
+
+function tokenSha256(token) {
+  return crypto.createHash('sha256').update(String(token), 'ascii').digest('hex');
+}
+
+/**
+ * True only for a signature-valid token that includes "developer", with fetchedAt
+ * recorded from a live /entitlements response and younger than DEVELOPER_FRESH_MS.
+ * Missing fetchedAt (token read from the cache file only) is false. Expired tokens
+ * are false (verifyEntitlementToken). `now` is the freshness clock; exp uses wall time.
+ */
+function isDeveloper({ token, fetchedAt, now = Date.now(), publicKeyHex } = {}) {
+  if (typeof fetchedAt !== 'number' || !Number.isFinite(fetchedAt)) return false;
+  const age = now - fetchedAt;
+  if (age < 0 || age >= DEVELOPER_FRESH_MS) return false;
+  const v = verifyEntitlementToken(token, publicKeyHex);
+  if (!v.ok) return false;
+  return v.payload.entitlements.includes(DEVELOPER_ENTITLEMENT);
+}
+
 // ---------------- entitlement file for the game ----------------
 
 function entitlementFilePath() {
@@ -116,7 +140,7 @@ function launchDecisionFromProbe(p, defaultAppId = cfg.DEFAULT_LAUNCH_APP_ID) {
 // ---------------- account manager ----------------
 
 // isSteamRunning is injectable for scripts/selftest.js only; the launcher always uses the tasklist check.
-function createAccountManager({ app, safeStorage, shell, utilityProcess, isSteamRunning = isSteamProcessRunning }) {
+function createAccountManager({ app, safeStorage, shell, utilityProcess, isSteamRunning = isSteamProcessRunning, publicKeyHex = cfg.ENTITLEMENT_PUBLIC_KEY_HEX }) {
   const sessionFile = () => path.join(app.getPath('userData'), 'account_session.bin');
   let memSession = null; // fallback when OS encryption isn't available (session then lasts until the launcher closes)
   let linkAbort = null;
@@ -162,6 +186,61 @@ function createAccountManager({ app, safeStorage, shell, utilityProcess, isSteam
     } catch (_) {
       return null;
     }
+  }
+
+  // fetchedAt for the developer gate. Not the entitlement file the game reads, and not a copy of the token.
+  const fetchMetaFile = () => path.join(app.getPath('userData'), 'entitlement_fetch.json');
+  let fetchMetaMem; // undefined = not loaded, null = none, else { fetchedAt, tokenSha256 }
+
+  function loadFetchMeta() {
+    if (fetchMetaMem !== undefined) return fetchMetaMem;
+    try {
+      const p = JSON.parse(fs.readFileSync(fetchMetaFile(), 'utf8'));
+      fetchMetaMem = p && typeof p.fetchedAt === 'number' && typeof p.tokenSha256 === 'string'
+        ? { fetchedAt: p.fetchedAt, tokenSha256: p.tokenSha256 }
+        : null;
+    } catch (_) {
+      fetchMetaMem = null;
+    }
+    return fetchMetaMem;
+  }
+
+  function rememberServerFetch(token, at = Date.now()) {
+    fetchMetaMem = { fetchedAt: at, tokenSha256: tokenSha256(token) };
+    try { fs.writeFileSync(fetchMetaFile(), JSON.stringify(fetchMetaMem)); } catch (_) { /* memory still counts */ }
+  }
+
+  function clearServerFetch() {
+    fetchMetaMem = null;
+    try { fs.unlinkSync(fetchMetaFile()); } catch (_) { /* not there */ }
+  }
+
+  /** Developer gate for this process. Cached token with no matching server fetch is false. */
+  function isDeveloperNow(now = Date.now()) {
+    const token = readEntitlementFile();
+    const meta = loadFetchMeta();
+    if (!token || !meta || meta.tokenSha256 !== tokenSha256(token)) return false;
+    return isDeveloper({ token, fetchedAt: meta.fetchedAt, now, publicKeyHex });
+  }
+
+  /**
+   * When the dev UI opens and the last /entitlements fetch is missing or older than 15 minutes,
+   * refresh once with the stored session. Never starts Steam. Offline or no session stays not-developer
+   * if the fetch is stale.
+   */
+  async function refreshDeveloperIfStale() {
+    const token = readEntitlementFile();
+    const meta = loadFetchMeta();
+    const age = token && meta && meta.tokenSha256 === tokenSha256(token) ? Date.now() - meta.fetchedAt : Infinity;
+    if (age >= 0 && age < DEVELOPER_FRESH_MS) return isDeveloperNow();
+    const sess = loadSession();
+    if (!sess) return false;
+    try {
+      await syncWithServer(sess);
+    } catch (_) {
+      return false;
+    }
+    return isDeveloperNow();
   }
 
   const appFile = () => path.join(app.getPath('userData'), 'steam_app.json'); // not secret: which app this account owns
@@ -272,7 +351,7 @@ function createAccountManager({ app, safeStorage, shell, utilityProcess, isSteam
   }
 
   function statusFromToken(token, source, extra = {}) {
-    const v = verifyEntitlementToken(token);
+    const v = verifyEntitlementToken(token, publicKeyHex);
     if (!v.ok) return { linked: false, source, reason: `token_${v.reason}`, ...extra };
     if (!extra.discordUsername) extra = { ...extra, discordUsername: cachedUsername(v.payload.discord_id) };
     return {
@@ -300,14 +379,16 @@ function createAccountManager({ app, safeStorage, shell, utilityProcess, isSteam
     }
     if (r.status === 404) {
       removeEntitlementFile(); // server says not linked: drop stale perks
+      clearServerFetch();
       return { linked: false, source: 'server', steamid: sess.steamid, reason: r.body.reason || 'not_linked' };
     }
     if (r.status !== 200 || !r.body.linked || typeof r.body.token !== 'string') {
       return { linked: false, source: 'server', reason: r.body.error || `http_${r.status}`, error: true };
     }
-    const v = verifyEntitlementToken(r.body.token, cfg.ENTITLEMENT_PUBLIC_KEY_HEX, sess.steamid || null);
+    const v = verifyEntitlementToken(r.body.token, publicKeyHex, sess.steamid || null);
     if (!v.ok) return { linked: false, source: 'server', reason: `token_${v.reason}`, error: true };
     writeEntitlementFile(r.body.token);
+    rememberServerFetch(r.body.token); // fetchedAt only when this token came from /entitlements
     if (typeof r.body.discord_username === 'string') saveProfile(v.payload.discord_id, r.body.discord_username);
     return statusFromToken(r.body.token, 'server', {
       inGuild: !!r.body.in_guild,
@@ -454,7 +535,10 @@ function createAccountManager({ app, safeStorage, shell, utilityProcess, isSteam
     return { ok: true, tier: Number(body && body.tier) || 0, tierName: str(body && body.tier_name, 16), branches };
   }
 
-  return { getStatus, linkDiscord, cancelLink, refreshBeforePlay, waitForSteamWorkers, fetchBranches };
+  return {
+    getStatus, linkDiscord, cancelLink, refreshBeforePlay, waitForSteamWorkers, fetchBranches,
+    isDeveloper: isDeveloperNow, refreshDeveloperIfStale,
+  };
 }
 
 module.exports = {
@@ -463,4 +547,6 @@ module.exports = {
   tierFromPayload,
   entitlementFilePath,
   launchDecisionFromProbe,
+  isDeveloper,
+  DEVELOPER_FRESH_MS,
 };
