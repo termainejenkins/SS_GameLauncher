@@ -64,7 +64,9 @@ test('non-developer token => false', () => {
 
 test('tampered signature => false', () => {
   const [body, sig] = devToken.split('.');
-  const flipped = sig.slice(0, -1) + (sig.endsWith('A') ? 'B' : 'A');
+  // Flip the first character. The last one is mostly unused padding and can still verify.
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const flipped = alphabet[(alphabet.indexOf(sig[0]) + 1) % alphabet.length] + sig.slice(1);
   assert.equal(isDeveloper({
     token: `${body}.${flipped}`, fetchedAt: clock, now: clock, publicKeyHex: pubHex,
   }), false);
