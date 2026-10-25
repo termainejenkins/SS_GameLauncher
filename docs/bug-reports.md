@@ -54,9 +54,8 @@ Do this from `bug-report-worker/` after `npx wrangler@4 login`. Do not put the w
    ```sh
    npx wrangler@4 r2 bucket lifecycle add tgc-bug-reports expire-bug-reports-90d reports/ --expire-days 90
    ```
-3. Create the rate-limit KV namespace and replace the all-zero `id` and `preview_id` in `bug-report-worker/wrangler.toml`.
+3. The production `RATE` id in `bug-report-worker/wrangler.toml` is the live namespace. `preview_id` is still the all-zero placeholder until a preview namespace exists:
    ```sh
-   npx wrangler@4 kv namespace create RATE
    npx wrangler@4 kv namespace create RATE --preview
    ```
 4. Create a private Discord channel and webhook, then store the URL as a Worker secret:
@@ -84,7 +83,7 @@ That runs `node --test bug-report.test.js` in `launcher-app/` and Vitest in `bug
 ## Still TODO
 
 - Create the private Discord channel and webhook, then `wrangler secret put DISCORD_WEBHOOK_URL`.
-- Create the R2 bucket and KV namespace, apply the lifecycle rule, replace the placeholder KV ids, and deploy. Do not enable public read on the bucket.
+- Create the R2 bucket, apply the lifecycle rule, and deploy. The production `RATE` id is the live namespace; `preview_id` is still the all-zero placeholder. Do not enable public read on the bucket.
 - Optional: add `gameBuild` and `gameBranch` to `launcher-config.json` beside the game. If they are absent, the launcher uses a `LogInit: Build:` line from the game log when it can see that file.
 - Ship a launcher build only with TJ's OK. This change does not bump the version, tag a release, or delete old releases.
 

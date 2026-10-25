@@ -67,9 +67,8 @@ From `bug-report-worker/`, with Wrangler 4 logged into the Sentient Solutions ac
    ```sh
    npx wrangler@4 r2 bucket lifecycle set tgc-bug-reports --file r2-lifecycle.json
    ```
-3. Create the KV namespace and paste the id into `wrangler.toml` (replace the all-zero `id` and `preview_id`):
+3. The production `RATE` id in `wrangler.toml` is the live namespace (`bb566c4909254ceb831e235bf40476d9`). `preview_id` is still the all-zero placeholder until a preview namespace exists:
    ```sh
-   npx wrangler@4 kv namespace create RATE
    npx wrangler@4 kv namespace create RATE --preview
    ```
 4. Set the Discord webhook. The value stays in the Worker secret store, not in git:
