@@ -1,3 +1,4 @@
+[![CI](https://github.com/termainejenkins/SS_GameLauncher/actions/workflows/ci.yml/badge.svg)](https://github.com/termainejenkins/SS_GameLauncher/actions/workflows/ci.yml)
 # SS_GameLauncher
 
 **Created by Termaine Jenkins (aka TJ, SENTIENT SOLUTIONS LLC)**

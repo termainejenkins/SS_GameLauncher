@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [22]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: |
+            launcher-app/package-lock.json
+            bug-report-worker/package-lock.json
+
+      - name: Install launcher dependencies
+        working-directory: launcher-app
+        run: npm ci
+
+      - name: Install bug-report worker dependencies
+        working-directory: bug-report-worker
+        run: npm ci
+
+      # launcher-app/package.json "test":
+      #   node --test bug-report.test.js developer.test.js
+      - name: Launcher unit tests
+        if: runner.os != 'Windows'
+        working-directory: launcher-app
+        run: npm test
+
+      # Test #17 asserts Unix mode 0600 on the install-id file
+      # (bug-report.test.js, "install id is a random uuid...").
+      # libuv on Windows reports a writable file as 0666, and chmod cannot
+      # store owner-only permission bits, so Node's --test-skip-pattern drops
+      # only that test. The test file is not modified. Ubuntu still runs it.
+      - name: Launcher unit tests (skip Unix file mode)
+        if: runner.os == 'Windows'
+        working-directory: launcher-app
+        run: |
+          node --test \
+            --test-skip-pattern '^install id is a random uuid stored locally and only the sha256 is for upload$' \
+            bug-report.test.js \
+            developer.test.js
+
+      - name: Bug-report worker tests
+        working-directory: bug-report-worker
+        run: npm test
+
+      # Not in this workflow:
+      # - scripts/selftest.js: five cases call the live account Worker and the
+      #   script has no offline switch.
+      # - scripts/smoke-electron.js: needs Electron and a display.
+      # - scripts/smoke-steam.js: needs Electron, Steam, and the account Worker.
+      # No Playwright Electron job: a local xvfb launch hit GPU process errors,
+      # so it is not reliable enough to add without app changes.
