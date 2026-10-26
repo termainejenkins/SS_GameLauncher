@@ -1,5 +1,6 @@
 // Plain-Node tests for the account code (no Electron, no Steam, no secrets).
 //   npm run selftest
+//   SELFTEST_LIVE=1 npm run selftest   # also calls the live account Worker
 'use strict';
 const crypto = require('crypto');
 const assert = require('assert');
@@ -7,8 +8,19 @@ const cfg = require('../config');
 const { verifyEntitlementToken, tierFromPayload, entitlementFilePath } = require('../account');
 
 let failed = 0;
+let skipped = 0;
 async function t(name, fn) {
   try { await fn(); console.log('PASS', name); } catch (e) { failed++; console.log('FAIL', name, '-', e.message); }
+}
+// The five account-server cases hit the live Worker. They run only when
+// SELFTEST_LIVE=1. Default (including CI) reports them as skipped and does not fetch.
+async function live(name, fn) {
+  if (process.env.SELFTEST_LIVE !== '1') {
+    skipped++;
+    console.log('SKIP', name, '- set SELFTEST_LIVE=1 to call the live account server');
+    return;
+  }
+  await t(name, fn);
 }
 
 // Sign exactly like SS_AccountServer/src/crypto.ts signEntitlement().
@@ -151,24 +163,24 @@ const good = { v: 1, steamid: '76561198000000000', discord_id: '1', entitlements
     assert.deepStrictEqual(d.args, ['-windowed']); assert.strictEqual(d.appid, '1865070');
   });
   try { fs.rmSync(tmp, { recursive: true, force: true }); fs.rmSync(path.join(os.tmpdir(), 'outside-tgc.exe'), { force: true }); } catch (_) { /* ignore */ }
-  // Live server contract checks (unauthenticated only).
-  await t('server /health ok', async () => {
+  // Live server contract checks (unauthenticated only). Opt-in: SELFTEST_LIVE=1.
+  await live('server /health ok', async () => {
     const r = await fetch(`${cfg.ACCOUNT_SERVER_URL}/health`); const b = await r.json();
     assert.strictEqual(r.status, 200); assert.strictEqual(b.ok, true);
   });
-  await t('server /entitlements without session -> 401', async () => {
+  await live('server /entitlements without session -> 401', async () => {
     const r = await fetch(`${cfg.ACCOUNT_SERVER_URL}/entitlements`, { headers: { authorization: 'Bearer nope' } });
     assert.strictEqual(r.status, 401);
   });
-  await t('server /steam/verify bad ticket -> 400 bad_ticket', async () => {
+  await live('server /steam/verify bad ticket -> 400 bad_ticket', async () => {
     const r = await fetch(`${cfg.ACCOUNT_SERVER_URL}/steam/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ticket: 'zz' }) });
     const b = await r.json(); assert.strictEqual(r.status, 400); assert.strictEqual(b.error, 'bad_ticket');
   });
-  await t('server /steam/verify demo appid + bad ticket -> 400 bad_ticket', async () => {
+  await live('server /steam/verify demo appid + bad ticket -> 400 bad_ticket', async () => {
     const r = await fetch(`${cfg.ACCOUNT_SERVER_URL}/steam/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ticket: 'zz', appid: cfg.STEAM_DEMO_APP_ID }) });
     const b = await r.json(); assert.strictEqual(r.status, 400); assert.strictEqual(b.error, 'bad_ticket');
   });
-  await t('server /steam/verify disallowed appid -> 400 bad_appid', async () => {
+  await live('server /steam/verify disallowed appid -> 400 bad_appid', async () => {
     const r = await fetch(`${cfg.ACCOUNT_SERVER_URL}/steam/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ticket: '00112233445566778899aabbccddeeff', appid: 480 }) });
     const b = await r.json(); assert.strictEqual(r.status, 400); assert.strictEqual(b.error, 'bad_appid');
   });
@@ -328,6 +340,7 @@ const good = { v: 1, steamid: '76561198000000000', discord_id: '1', entitlements
       assert.ok(ren.includes('steam://store/${demo}') && ren.includes('https://store.steampowered.com/app/1865070/') && ren.includes("'steam://open/main'"));
     });
   }
+  if (skipped) console.log(`${skipped} skipped`);
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
   process.exit(failed ? 1 : 0);
 })();

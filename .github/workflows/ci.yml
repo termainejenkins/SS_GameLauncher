@@ -69,13 +69,17 @@ jobs:
             bug-report.test.js \
             developer.test.js
 
+      # scripts/selftest.js stays offline unless SELFTEST_LIVE=1. This step
+      # does not set that variable, so the five live account-server cases skip.
+      - name: Launcher selftest
+        working-directory: launcher-app
+        run: npm run selftest
+
       - name: Bug-report worker tests
         working-directory: bug-report-worker
         run: npm test
 
       # Not in this workflow:
-      # - scripts/selftest.js: five cases call the live account Worker and the
-      #   script has no offline switch.
       # - scripts/smoke-electron.js: needs Electron and a display.
       # - scripts/smoke-steam.js: needs Electron, Steam, and the account Worker.
       # No Playwright Electron job: a local xvfb launch hit GPU process errors,
