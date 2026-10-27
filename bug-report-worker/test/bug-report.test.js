@@ -83,7 +83,11 @@ async function submit(env, fields, { ip = '203.0.113.9', now = NOW } = {}) {
   const req = new Request('https://bug-report.example.com/api/bug-report', {
     method: 'POST',
     body: form,
-    headers: { 'CF-Connecting-IP': ip },
+    headers: {
+      'CF-Connecting-IP': ip,
+      // Undici does not set Content-Length on a FormData body. The worker requires one under the cap.
+      'content-length': String(MAX_BODY_BYTES - 1),
+    },
   });
   return handleRequest(req, env, {}, { now: () => now });
 }
@@ -139,6 +143,32 @@ describe('validation', () => {
     expect(env.BUGS.objects.size).toBe(0);
   });
 
+  it('rejects a missing or blank content-length before reading the form', async () => {
+    const env = testEnv();
+    const cases = [
+      new Headers({ 'content-type': 'multipart/form-data; boundary=abc' }),
+      new Headers({ 'content-type': 'multipart/form-data; boundary=abc', 'content-length': '' }),
+      new Headers({ 'content-type': 'multipart/form-data; boundary=abc', 'content-length': 'nope' }),
+    ];
+    for (const headers of cases) {
+      let parsed = false;
+      const res = await handleRequest({
+        method: 'POST',
+        url: 'https://bug-report.example.com/api/bug-report',
+        headers,
+        async formData() { parsed = true; return new FormData(); },
+      }, env, {});
+      expect(res.status).toBe(411);
+      expect(await res.json()).toEqual({ error: 'length_required', message: 'Content-Length is required.' });
+      expect(parsed).toBe(false);
+    }
+    expect(env.BUGS.objects.size).toBe(0);
+
+    stubDiscord();
+    const ok = await submit(env, baseFields());
+    expect(ok.status).toBe(201);
+  });
+
   it('rejects a bad category, a short or long description, a bad install id, and a non-zip', async () => {
     const env = testEnv();
     expect((await submit(env, baseFields({ category: 'nope' }))).status).toBe(400);
@@ -172,7 +202,10 @@ describe('validation', () => {
     const zipRes = await handleRequest({
       method: 'POST',
       url: 'https://bug-report.example.com/api/bug-report',
-      headers: new Headers({ 'content-type': 'multipart/form-data; boundary=abc' }),
+      headers: new Headers({
+        'content-type': 'multipart/form-data; boundary=abc',
+        'content-length': '128',
+      }),
       formData: async () => form,
     }, env, {}, { now: () => NOW });
     expect(zipRes.status).toBe(413);
@@ -192,7 +225,10 @@ describe('validation', () => {
     const shotRes = await handleRequest({
       method: 'POST',
       url: 'https://bug-report.example.com/api/bug-report',
-      headers: new Headers({ 'content-type': 'multipart/form-data; boundary=abc' }),
+      headers: new Headers({
+        'content-type': 'multipart/form-data; boundary=abc',
+        'content-length': '128',
+      }),
       formData: async () => form2,
     }, env, {}, { now: () => NOW });
     expect(shotRes.status).toBe(413);

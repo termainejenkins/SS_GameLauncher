@@ -25,7 +25,12 @@ export async function handleRequest(request, env, _ctx, deps = {}) {
   if (!isMultipart(request.headers.get('content-type'))) {
     return json(415, { error: 'unsupported_media_type', message: 'Send multipart/form-data.' });
   }
-  if (contentLengthTooBig(request.headers.get('content-length'), MAX_BODY_BYTES)) {
+  // formData() reads the whole body. A missing or non-numeric length means there is no cap to apply first.
+  const contentLength = request.headers.get('content-length');
+  if (contentLength == null || contentLength.trim() === '' || !Number.isFinite(Number(contentLength))) {
+    return json(411, { error: 'length_required', message: 'Content-Length is required.' });
+  }
+  if (contentLengthTooBig(contentLength, MAX_BODY_BYTES)) {
     return json(413, { error: 'too_large', message: 'Report is over the size limit.' });
   }
 
