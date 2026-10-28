@@ -16,17 +16,21 @@ The Worker is deployed at `https://tgc-bug-report.sentientsolutions.workers.dev/
 | `zip` | yes | ZIP file, magic bytes `PK\x03\x04`, at most 25 MB |
 | `screenshot` | no | PNG or JPG, at most 8 MB |
 | `launcherVersion`, `gameBuild`, `gpu` | no | Stored and shown in Discord, clipped to 200 characters |
+| `app` | no | Allowlisted name of another Sentient Solutions app. The only name today is `ReplyReader`, matched case-insensitively and stored as `ReplyReader`. Omit the field, or leave it blank, for a launcher report. Any other value is **400** `invalid_app`. Nothing is stored, and the rate counters do not move. |
+| `appVersion` | no | Kept only when it looks like a version: `1.2.3`, an optional leading `v`, and an optional prerelease such as `-beta.1`. Anything else is ignored and stored as `null`. |
 | `entitlementToken` | no | Signed entitlement token, when the launcher has one. If it verifies, is unexpired, and includes `developer`, the stored JSON gets `"developer": true` and the Discord note starts with `[DEV]`. A missing, bad, or expired token is ignored. The report is still accepted. The token is not stored or logged. |
 
-A bad field value is a 4xx. An unknown extra field is ignored. The body cap is 25 MB plus the 8 MB screenshot allowance plus 256 KB of multipart overhead. Over that, the response is **413**. Over the daily rate limit, the response is **429** with `Retry-After` (seconds until the next UTC day).
+A bad field value is a 4xx. An unknown extra field is ignored. A value of `app` that is not on the allowlist is rejected, not ignored. The body cap is 25 MB plus the 8 MB screenshot allowance plus 256 KB of multipart overhead. Over that, the response is **413**. Over the daily rate limit, the response is **429** with `Retry-After` (seconds until the next UTC day).
 
 A valid report is stored at:
 
 - `reports/<YYYY-MM-DD>/<id>.zip`
-- `reports/<YYYY-MM-DD>/<id>.json` — category, game build, GPU, description, launcher version, createdAt, report id, and `hasScreenshot`. `"developer": true` when the entitlement token verified as a developer. No IP, no install-id hash, and no entitlement token.
+- `reports/<YYYY-MM-DD>/<id>.json` — category, game build, GPU, description, launcher version, `app` (`launcher` when the field was omitted), `appVersion` (or `null`), createdAt, report id, and `hasScreenshot`. `"developer": true` when the entitlement token verified as a developer. No IP, no install-id hash, and no entitlement token.
 - `reports/<YYYY-MM-DD>/<id>.png` or `.jpg` when a screenshot was attached
 
-Discord gets category, game build, GPU, launcher version, the first 200 characters of the description, and the report id. `@everyone` and `@here` are broken up, and the webhook is called with `allowed_mentions: { parse: [] }`. If Discord errors, the R2 objects stay and the player still gets a success response.
+The zip and the JSON object are written with R2 custom metadata `app`, `appVersion` (empty when none was accepted), and `category`. A listing can separate ReplyReader objects from launcher objects without reading the JSON. The key layout is unchanged.
+
+A launcher report (no `app`) sends Discord the same note as before: category, game build, GPU, launcher version, the first 200 characters of the description, and the report id. A report with an allowlisted `app` sends `App: ReplyReader 0.8.0` (or `unknown` when `appVersion` was missing or ignored) and the category, and does not include the game-build, GPU, or launcher lines. `@everyone` and `@here` are broken up, and the webhook is called with `allowed_mentions: { parse: [] }`. If Discord errors, the R2 objects stay and the player still gets a success response.
 
 ## Rate limits (KV, not a Durable Object)
 
@@ -34,6 +38,8 @@ Counters live in the `RATE` KV namespace:
 
 - 5 accepted reports per install-id hash per UTC day
 - 20 accepted reports per IP hash per UTC day
+
+The counters are not split by app. ReplyReader and the launcher share these caps. ReplyReader uses its own install id, so its reports do not spend a launcher install's allowance. They do count toward the shared per-IP cap.
 
 KV is a good fit here. Bug reports are rare, and the failure mode of KV's last-write-wins race is one extra report if two requests pass the check together. A Durable Object would serialize that, at the cost of a class, a migration, and a round trip for every report. That extra strictness does not change the outcome for this form.
 

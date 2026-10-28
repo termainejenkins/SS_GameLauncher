@@ -5,17 +5,21 @@ export function neutralizeMentions(text) {
     .replace(/<@[&!]?\d+>/g, '[mention]');
 }
 
-export function discordPayload({ category, gameBuild, gpu, description, reportId, launcherVersion, developer }) {
+export function discordPayload({ category, gameBuild, gpu, description, reportId, launcherVersion, developer, app, appVersion }) {
   const desc = neutralizeMentions(description).slice(0, 200);
-  const content = [
-    `${developer ? '[DEV] ' : ''}Bug report ${reportId}`,
-    `Category: ${neutralizeMentions(category)}`,
-    `Game build: ${neutralizeMentions(gameBuild || 'unknown')}`,
-    `GPU: ${neutralizeMentions(gpu || 'unknown')}`,
-    `Launcher: ${neutralizeMentions(launcherVersion || 'unknown')}`,
-    '',
-    desc,
-  ].join('\n').slice(0, 1800);
+  const lines = [`${developer ? '[DEV] ' : ''}Bug report ${reportId}`];
+  if (app) {
+    lines.push(`App: ${neutralizeMentions(app)} ${neutralizeMentions(appVersion || 'unknown')}`);
+    lines.push(`Category: ${neutralizeMentions(category)}`);
+  } else {
+    lines.push(
+      `Category: ${neutralizeMentions(category)}`,
+      `Game build: ${neutralizeMentions(gameBuild || 'unknown')}`,
+      `GPU: ${neutralizeMentions(gpu || 'unknown')}`,
+      `Launcher: ${neutralizeMentions(launcherVersion || 'unknown')}`,
+    );
+  }
+  const content = [...lines, '', desc].join('\n').slice(0, 1800);
   return {
     content,
     allowed_mentions: { parse: [] },

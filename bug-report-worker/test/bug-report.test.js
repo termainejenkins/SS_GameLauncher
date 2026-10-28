@@ -32,7 +32,12 @@ function memoryR2() {
   return {
     objects,
     async put(key, value, opts) {
-      objects.set(key, { key, body: await toBuf(value), httpMetadata: opts && opts.httpMetadata });
+      objects.set(key, {
+        key,
+        body: await toBuf(value),
+        httpMetadata: opts && opts.httpMetadata,
+        customMetadata: opts && opts.customMetadata,
+      });
     },
     async get(key) { return objects.get(key) || null; },
     async delete(key) { objects.delete(key); },
@@ -324,6 +329,119 @@ describe('stored report', () => {
   });
 });
 
+function storedMeta(env, id) {
+  const obj = env.BUGS.objects.get(`reports/2026-10-24/${id}.json`);
+  return { obj, meta: JSON.parse(obj.body.toString('utf8')) };
+}
+
+describe('app field', () => {
+  it('labels a ReplyReader report in R2 and Discord', async () => {
+    const env = testEnv();
+    const { calls } = stubDiscord();
+    const res = await submit(env, baseFields({
+      category: 'other',
+      app: 'ReplyReader',
+      appVersion: '0.8.0',
+      launcherVersion: 'ReplyReader 0.8.0',
+    }));
+    expect(res.status).toBe(201);
+    const { id } = await res.json();
+    const { meta, obj } = storedMeta(env, id);
+    expect(meta.app).toBe('ReplyReader');
+    expect(meta.appVersion).toBe('0.8.0');
+    const zip = env.BUGS.objects.get(`reports/2026-10-24/${id}.zip`);
+    expect(zip.customMetadata).toEqual({ app: 'ReplyReader', appVersion: '0.8.0', category: 'other' });
+    expect(obj.customMetadata).toEqual(zip.customMetadata);
+    const content = JSON.parse(calls[0].init.body).content;
+    expect(content).toContain('App: ReplyReader 0.8.0');
+    expect(content.includes('Game build:')).toBe(false);
+    expect(content.includes('GPU:')).toBe(false);
+    expect(content.includes('Launcher:')).toBe(false);
+  });
+
+  it('stores the canonical app name when the form value differs only by case or surrounding space', async () => {
+    const env = testEnv();
+    stubDiscord();
+    const res = await submit(env, baseFields({
+      category: 'other',
+      app: '  replyreader  ',
+      appVersion: '0.8.0',
+    }));
+    expect(res.status).toBe(201);
+    const { id } = await res.json();
+    expect(storedMeta(env, id).meta.app).toBe('ReplyReader');
+  });
+
+  it('rejects an unknown app before storing or counting it', async () => {
+    const env = testEnv();
+    const { calls } = stubDiscord();
+    const res = await submit(env, baseFields({ app: 'Whatever' }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'invalid_app', message: 'Unknown app.' });
+    expect(env.BUGS.objects.size).toBe(0);
+    expect(env.RATE.store.size).toBe(0);
+    expect(calls).toHaveLength(0);
+
+    const ok = await submit(env, baseFields());
+    expect(ok.status).toBe(201);
+  });
+
+  it('ignores an appVersion that is not semver-like', async () => {
+    const env = testEnv();
+    const { calls } = stubDiscord();
+    const res = await submit(env, baseFields({
+      category: 'other',
+      app: 'ReplyReader',
+      appVersion: '<@123> lol',
+    }));
+    expect(res.status).toBe(201);
+    const { id } = await res.json();
+    const { meta, obj } = storedMeta(env, id);
+    expect(meta.app).toBe('ReplyReader');
+    expect(meta.appVersion).toBeNull();
+    expect(obj.customMetadata.appVersion).toBe('');
+    const content = JSON.parse(calls[0].init.body).content;
+    expect(content).toContain('App: ReplyReader unknown');
+    expect(content.includes('<@')).toBe(false);
+    expect(content.includes('lol')).toBe(false);
+
+    const kept = await submit(env, baseFields({
+      installId: 'cd'.repeat(32),
+      category: 'other',
+      app: 'ReplyReader',
+      appVersion: 'v1.2.3-beta.1',
+    }), { ip: '203.0.113.40' });
+    expect(kept.status).toBe(201);
+    const keptId = (await kept.json()).id;
+    expect(storedMeta(env, keptId).meta.appVersion).toBe('v1.2.3-beta.1');
+  });
+
+  it('keeps a launcher report unlabeled and the Discord note byte-for-byte', async () => {
+    const env = testEnv();
+    const { calls } = stubDiscord();
+    const missing = await submit(env, baseFields());
+    const blank = await submit(env, baseFields({ app: '   ' }), { ip: '203.0.113.15' });
+    expect(missing.status).toBe(201);
+    expect(blank.status).toBe(201);
+    const ids = [(await missing.json()).id, (await blank.json()).id];
+    ids.forEach((id, i) => {
+      const { meta, obj } = storedMeta(env, id);
+      expect(meta.app).toBe('launcher');
+      expect(meta.appVersion).toBeNull();
+      expect(obj.customMetadata).toEqual({ app: 'launcher', appVersion: '', category: 'crash' });
+      expect(JSON.parse(calls[i].init.body).content).toBe([
+        `Bug report ${id}`,
+        'Category: crash',
+        'Game build: 1234',
+        'GPU: Test GPU',
+        'Launcher: 1.1.5',
+        '',
+        'The game froze while tracking the herd at dusk.',
+      ].join('\n'));
+    });
+  });
+});
+
 describe('rate limit', () => {
   it('counts installs and IPs, expires counters, and never stores the raw IP', async () => {
     const kv = memoryKv();
@@ -392,6 +510,62 @@ describe('rate limit', () => {
     expect(blocked.status).toBe(429);
     expect([...env.RATE.store.keys()].join(' ')).not.toContain('198.51.100.20');
   });
+
+  it('counts ReplyReader toward the same install cap without spending another install', async () => {
+    const env = testEnv();
+    stubDiscord();
+    const readerInstall = 'cd'.repeat(32);
+    for (let i = 0; i < 4; i++) {
+      const res = await submit(env, baseFields({ installId: readerInstall }), { ip: `203.0.113.${i + 1}` });
+      expect(res.status).toBe(201);
+    }
+    const fifth = await submit(env, baseFields({
+      installId: readerInstall,
+      category: 'other',
+      app: 'ReplyReader',
+      appVersion: '0.8.0',
+    }), { ip: '203.0.113.40' });
+    expect(fifth.status).toBe(201);
+    const sixth = await submit(env, baseFields({
+      installId: readerInstall,
+      category: 'other',
+      app: 'ReplyReader',
+      appVersion: '0.8.0',
+    }), { ip: '203.0.113.41' });
+    expect(sixth.status).toBe(429);
+
+    const launcher = await submit(env, baseFields({ installId: INSTALL }), { ip: '203.0.113.42' });
+    expect(launcher.status).toBe(201);
+    const keys = [...env.RATE.store.keys()].join(' ');
+    expect(keys.includes('ReplyReader')).toBe(false);
+    expect(keys.includes(`install:${readerInstall}:2026-10-24`)).toBe(true);
+    expect(keys.includes(`install:${INSTALL}:2026-10-24`)).toBe(true);
+  });
+
+  it('shares the 20-per-IP cap between the launcher and ReplyReader', async () => {
+    const env = testEnv();
+    stubDiscord();
+    for (let i = 0; i < 19; i++) {
+      const installId = i.toString(16).padStart(64, 'a');
+      const res = await submit(env, baseFields({ installId }), { ip: '198.51.100.77' });
+      expect(res.status).toBe(201);
+    }
+    const twentieth = await submit(env, baseFields({
+      installId: 'b'.repeat(64),
+      category: 'other',
+      app: 'ReplyReader',
+      appVersion: '0.8.0',
+    }), { ip: '198.51.100.77' });
+    expect(twentieth.status).toBe(201);
+    const blocked = await submit(env, baseFields({
+      installId: 'c'.repeat(64),
+      category: 'other',
+      app: 'ReplyReader',
+      appVersion: '0.8.0',
+    }), { ip: '198.51.100.77' });
+    expect(blocked.status).toBe(429);
+    expect([...env.RATE.store.keys()].join(' ')).not.toContain('198.51.100.77');
+  });
 });
 
 describe('discord payload', () => {
@@ -407,6 +581,57 @@ describe('discord payload', () => {
     expect(payload.allowed_mentions).toEqual({ parse: [] });
     expect(payload.content.includes('TAIL')).toBe(false);
     expect(payload.content.includes('z'.repeat(200))).toBe(true);
+  });
+
+  it('keeps the launcher note and uses an App line only when an app is set', () => {
+    const reportId = '11111111-1111-4111-8111-111111111111';
+    const launcher = discordPayload({
+      category: 'crash',
+      gameBuild: '1234',
+      gpu: 'Test GPU',
+      description: 'The game froze while tracking the herd at dusk.',
+      reportId,
+      launcherVersion: '1.1.5',
+    });
+    expect(launcher.content).toBe([
+      `Bug report ${reportId}`,
+      'Category: crash',
+      'Game build: 1234',
+      'GPU: Test GPU',
+      'Launcher: 1.1.5',
+      '',
+      'The game froze while tracking the herd at dusk.',
+    ].join('\n'));
+
+    const labeled = discordPayload({
+      category: 'other',
+      gameBuild: 'should-not-show',
+      gpu: 'should-not-show',
+      description: 'The overlay did not attach.',
+      reportId,
+      launcherVersion: 'ReplyReader 0.8.0',
+      app: 'ReplyReader',
+      appVersion: '0.8.0',
+      developer: true,
+    });
+    expect(labeled.allowed_mentions).toEqual({ parse: [] });
+    expect(labeled.content).toBe([
+      `[DEV] Bug report ${reportId}`,
+      'App: ReplyReader 0.8.0',
+      'Category: other',
+      '',
+      'The overlay did not attach.',
+    ].join('\n'));
+    expect(labeled.content.includes('Game build:')).toBe(false);
+    expect(labeled.content.includes('should-not-show')).toBe(false);
+
+    const unknown = discordPayload({
+      category: 'other',
+      description: 'The overlay did not attach.',
+      reportId,
+      app: 'ReplyReader',
+    });
+    expect(unknown.content).toContain('App: ReplyReader unknown');
   });
 });
 
