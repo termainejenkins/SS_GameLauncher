@@ -77,15 +77,24 @@ export async function handleRequest(request, env, _ctx, deps = {}) {
     gpu: report.gpu,
     description: report.description,
     launcherVersion: report.launcherVersion,
+    app: report.app || 'launcher',
+    appVersion: report.appVersion,
     createdAt: now.toISOString(),
     reportId,
     hasScreenshot: !!report.screenshot,
   };
   if (developer) meta.developer = true;
 
+  // customMetadata is how a listing tells ReplyReader objects from launcher ones without reading the JSON.
+  const customMetadata = {
+    app: meta.app,
+    appVersion: report.appVersion || '',
+    category: report.category,
+  };
+
   try {
-    await env.BUGS.put(zipKey, report.zipBytes, { httpMetadata: { contentType: 'application/zip' } });
-    await env.BUGS.put(jsonKey, JSON.stringify(meta), { httpMetadata: { contentType: 'application/json' } });
+    await env.BUGS.put(zipKey, report.zipBytes, { httpMetadata: { contentType: 'application/zip' }, customMetadata });
+    await env.BUGS.put(jsonKey, JSON.stringify(meta), { httpMetadata: { contentType: 'application/json' }, customMetadata });
     if (shotKey) {
       await env.BUGS.put(shotKey, report.screenshot.bytes, { httpMetadata: { contentType: report.screenshot.contentType } });
     }
@@ -114,6 +123,8 @@ export async function handleRequest(request, env, _ctx, deps = {}) {
       reportId,
       launcherVersion: report.launcherVersion,
       developer,
+      app: report.app,
+      appVersion: report.appVersion,
     });
     const note = await notifyDiscord(env.DISCORD_WEBHOOK_URL, payload);
     discordNotified = !!note.ok;

@@ -1,5 +1,12 @@
 import { CATEGORIES, DESC_MAX, DESC_MIN, SCREENSHOT_MAX_BYTES, ZIP_MAX_BYTES } from './limits.js';
 
+// Apps other than the launcher that may file reports here. A missing or blank
+// app is the launcher, so older launcher builds stay on today's path.
+export const APPS = Object.freeze(['ReplyReader']);
+
+// Semver-like only, so nothing free-form reaches Discord through appVersion.
+const APP_VERSION_RE = /^v?\d{1,9}\.\d{1,9}\.\d{1,9}(?:-[0-9A-Za-z.-]{1,40})?$/;
+
 export function json(status, obj, extra) {
   return new Response(JSON.stringify(obj), {
     status,
@@ -94,6 +101,17 @@ export async function validateReport(form) {
     screenshot = { bytes: shotBytes, ext: kind === 'jpeg' ? 'jpg' : 'png', contentType: kind === 'jpeg' ? 'image/jpeg' : 'image/png' };
   }
 
+  const appRaw = fieldText(form, 'app').trim();
+  let app = null;
+  if (appRaw) {
+    app = APPS.find((name) => name.toLowerCase() === appRaw.toLowerCase()) || null;
+    if (!app) {
+      return { ok: false, response: json(400, { error: 'invalid_app', message: 'Unknown app.' }) };
+    }
+  }
+  const appVersionRaw = fieldText(form, 'appVersion').trim();
+  const appVersion = APP_VERSION_RE.test(appVersionRaw) ? appVersionRaw : null;
+
   const clip = (name) => {
     const t = redactIncoming(fieldText(form, name).trim());
     return t ? t.slice(0, 200) : null;
@@ -108,6 +126,8 @@ export async function validateReport(form) {
       launcherVersion: clip('launcherVersion'),
       gameBuild: clip('gameBuild'),
       gpu: clip('gpu'),
+      app,
+      appVersion,
       zipBytes,
       screenshot,
     },
