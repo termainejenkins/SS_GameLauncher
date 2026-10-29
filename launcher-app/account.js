@@ -439,7 +439,16 @@ function createAccountManager({ app, safeStorage, shell, utilityProcess, isSteam
       } catch (_) { /* ignore */ }
 
       onProgress('browser');
-      await shell.openExternal(`${cfg.ACCOUNT_SERVER_URL}/link/start?session=${encodeURIComponent(sess.session)}`);
+      const linkUrl = `${cfg.ACCOUNT_SERVER_URL}/link/start?session=${encodeURIComponent(sess.session)}`;
+      // An empty URL (no private config) must not throw out of openExternal.
+      // Fail the same way an unreachable account server does.
+      let openable = false;
+      try {
+        const target = new URL(linkUrl);
+        openable = target.protocol === 'https:' || target.protocol === 'http:';
+      } catch (_) { openable = false; }
+      if (!openable) return { linked: false, source: 'server', reason: 'server_unreachable', error: true };
+      await shell.openExternal(linkUrl);
 
       onProgress('waiting', { relink: !!before });
       const deadline = Date.now() + cfg.LINK_TIMEOUT_MS;

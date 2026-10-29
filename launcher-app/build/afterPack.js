@@ -4,8 +4,11 @@
 'use strict';
 const path = require('path');
 const rcedit = require('rcedit');
+const { restorePrivateConfig } = require('./private-config');
 
 exports.default = async function afterPack(context) {
+  // The asar (or unpacked app dir) already has the staged private file.
+  restorePrivateConfig();
   if (context.electronPlatformName !== 'win32') return;
   const exe = path.join(context.appOutDir, `${context.packager.platformSpecificBuildOptions.executableName || context.packager.appInfo.productFilename}.exe`);
   const version = context.packager.appInfo.version;

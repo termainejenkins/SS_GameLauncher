@@ -10,6 +10,12 @@ const test = require('node:test');
 const bug = require('./bug-report');
 const cfg = require('./config');
 
+// Fake host injected through the same resolver the launcher uses. Not a deployment.
+const FAKE_BUG_REPORT_URL = cfg.resolvePrivateUrls({
+  env: { BUG_REPORT_URL: 'https://bug-report.example.test/api/bug-report' },
+  filePath: null,
+}).BUG_REPORT_URL;
+
 const USER = 'Alice';
 
 function scrub(text) {
@@ -267,7 +273,7 @@ test('25 MB cap constant, and a zip over the cap is tailed to the cap', async ()
       userNames: [USER],
       localAppData: dir,
       projectDir: 'TheGreatCircle',
-      uploadUrl: cfg.BUG_REPORT_URL,
+      uploadUrl: FAKE_BUG_REPORT_URL,
       forSend: true,
       maxZipBytes: bug.ZIP_MAX_BYTES,
     });
@@ -370,7 +376,7 @@ test('collection keeps the newest crash folder and drops ini, tokens, and config
       ramBytes: 1024,
       gpu: { name: 'Test GPU', driverVersion: '1.2.3', vramBytes: 2048 },
       configPath: path.join(dir, 'missing-config.json'),
-      uploadUrl: cfg.BUG_REPORT_URL,
+      uploadUrl: FAKE_BUG_REPORT_URL,
       forSend: true,
       settingsPath: path.join(dir, 'settings.json'),
     });
@@ -447,15 +453,57 @@ test('install id is a random uuid stored locally and only the sha256 is for uplo
 });
 
 test('unset or placeholder URL sends nothing', async () => {
-  const deployed = 'https://tgc-bug-report.sentientsolutions.workers.dev/api/bug-report';
-  assert.equal(cfg.BUG_REPORT_URL, deployed);
-  assert.equal(bug.isBugReportConfigured(cfg.BUG_REPORT_URL), true);
+  const src = fs.readFileSync(path.join(__dirname, 'config.js'), 'utf8');
+  const urls = src.match(/https?:\/\/[^\s'"`,)]+/g) || [];
+  assert.deepEqual(urls, ['http://localhost:3000']);
+
+  const missing = path.join(os.tmpdir(), `tgc-no-private-${process.pid}-${Date.now()}.json`);
+  const absent = cfg.resolvePrivateUrls({ env: {}, filePath: missing });
+  assert.equal(absent.BUG_REPORT_URL, '');
+  assert.equal(absent.ACCOUNT_SERVER_URL, '');
+  assert.equal(bug.isBugReportConfigured(absent.BUG_REPORT_URL), false);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-private-cfg-'));
+  const file = path.join(dir, 'config.private.json');
+  const fakeBug = 'https://bug-report.example.invalid/api/bug-report';
+  const fakeAccount = 'https://account.example.invalid';
+  try {
+    fs.writeFileSync(file, JSON.stringify({
+      ACCOUNT_SERVER_URL: fakeAccount,
+      BUG_REPORT_URL: fakeBug,
+    }));
+    const fromFile = cfg.resolvePrivateUrls({ env: {}, filePath: file });
+    assert.equal(fromFile.BUG_REPORT_URL, fakeBug);
+    assert.equal(fromFile.ACCOUNT_SERVER_URL, fakeAccount);
+    assert.equal(bug.isBugReportConfigured(fromFile.BUG_REPORT_URL), false);
+
+    const fromEnv = cfg.resolvePrivateUrls({
+      env: { BUG_REPORT_URL: FAKE_BUG_REPORT_URL, ACCOUNT_SERVER_URL: '   ' },
+      filePath: file,
+    });
+    assert.equal(fromEnv.BUG_REPORT_URL, FAKE_BUG_REPORT_URL);
+    assert.equal(fromEnv.ACCOUNT_SERVER_URL, fakeAccount);
+    assert.equal(bug.isBugReportConfigured(fromEnv.BUG_REPORT_URL), true);
+
+    fs.writeFileSync(file, '{');
+    const bad = cfg.resolvePrivateUrls({ env: {}, filePath: file });
+    assert.equal(bad.BUG_REPORT_URL, '');
+    assert.equal(bad.ACCOUNT_SERVER_URL, '');
+
+    const example = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.private.example.json'), 'utf8'));
+    assert.equal(bug.isBugReportConfigured(example.BUG_REPORT_URL), false);
+    assert.equal(new URL(example.ACCOUNT_SERVER_URL).hostname.endsWith('.invalid'), true);
+    assert.equal(new URL(example.BUG_REPORT_URL).hostname.endsWith('.invalid'), true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
   assert.equal(bug.isBugReportConfigured(''), false);
   assert.equal(bug.isBugReportConfigured(undefined), false);
   assert.equal(bug.isBugReportConfigured(bug.BUG_REPORT_URL_PLACEHOLDER), false);
 
   let called = false;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-bug-url-'));
+  const sendDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-bug-url-'));
   try {
     for (const uploadUrl of ['', undefined, bug.BUG_REPORT_URL_PLACEHOLDER]) {
       called = false;
@@ -465,7 +513,7 @@ test('unset or placeholder URL sends nothing', async () => {
         attachLogs: false,
         attachSystemInfo: false,
         uploadUrl,
-        settingsPath: path.join(dir, 'id.json'),
+        settingsPath: path.join(sendDir, 'id.json'),
         postImpl() { called = true; throw new Error('should not post'); },
       });
       assert.equal(called, false);
@@ -475,7 +523,70 @@ test('unset or placeholder URL sends nothing', async () => {
     }
     assert.equal(cfg.GAME_SAVED_PROJECT_DIR, 'TheGreatCircle_4_27');
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(sendDir, { recursive: true, force: true });
+  }
+});
+
+test('pack step applies env URLs over the private file and restores it', () => {
+  const { stagePrivateConfig, restorePrivateConfig } = require('./build/private-config');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-pack-'));
+  const withFile = path.join(root, 'with-file');
+  const envOnly = path.join(root, 'env-only');
+  const empty = path.join(root, 'empty');
+  fs.mkdirSync(withFile);
+  fs.mkdirSync(envOnly);
+  fs.mkdirSync(empty);
+  const file = path.join(withFile, 'config.private.json');
+  const original = `${JSON.stringify({
+    ACCOUNT_SERVER_URL: 'https://account.example.invalid',
+    BUG_REPORT_URL: 'https://bug-report.example.invalid/api/bug-report',
+    note: 'keep',
+  }, null, 2)}\n`;
+  try {
+    fs.writeFileSync(file, original);
+    const staged = stagePrivateConfig(withFile, {
+      BUG_REPORT_URL: 'https://bug-report.example.test/api/bug-report',
+    });
+    assert.equal(staged.wrote, true);
+    assert.equal(staged.included, true);
+    const packed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.equal(packed.BUG_REPORT_URL, 'https://bug-report.example.test/api/bug-report');
+    assert.equal(packed.ACCOUNT_SERVER_URL, 'https://account.example.invalid');
+    assert.equal(packed.note, 'keep');
+    assert.equal(bug.isBugReportConfigured(packed.BUG_REPORT_URL), true);
+    restorePrivateConfig();
+    assert.equal(fs.readFileSync(file, 'utf8'), original);
+
+    const untouched = stagePrivateConfig(withFile, {});
+    assert.equal(untouched.wrote, false);
+    assert.equal(untouched.included, true);
+    assert.equal(fs.readFileSync(file, 'utf8'), original);
+    restorePrivateConfig();
+
+    const created = stagePrivateConfig(envOnly, {
+      ACCOUNT_SERVER_URL: 'https://account.example.test',
+    });
+    assert.equal(created.wrote, true);
+    assert.equal(created.included, true);
+    const createdFile = path.join(envOnly, 'config.private.json');
+    assert.equal(JSON.parse(fs.readFileSync(createdFile, 'utf8')).ACCOUNT_SERVER_URL, 'https://account.example.test');
+    restorePrivateConfig();
+    assert.equal(fs.existsSync(createdFile), false);
+
+    const none = stagePrivateConfig(empty, {});
+    assert.equal(none.included, false);
+    assert.equal(none.wrote, false);
+    assert.equal(fs.existsSync(path.join(empty, 'config.private.json')), false);
+    restorePrivateConfig();
+
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+    assert.equal(pkg.build.files.includes('config.private.json'), true);
+    assert.equal(pkg.build.beforePack, 'build/beforePack.js');
+    const gitignore = fs.readFileSync(path.join(__dirname, '..', '.gitignore'), 'utf8');
+    assert.match(gitignore, /^launcher-app\/config\.private\.json$/m);
+  } finally {
+    restorePrivateConfig();
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 

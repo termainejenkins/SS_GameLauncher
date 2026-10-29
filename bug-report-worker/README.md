@@ -2,7 +2,7 @@
 
 Private intake for the launcher's **Report a bug** form. The launcher zips logs and posts them to `POST /api/bug-report`. This Worker checks the upload, rate-limits it, stores it in a private R2 bucket, and posts a short note to Discord.
 
-The Worker is deployed at the bug-report intake Worker, a Cloudflare Worker, set in the launcher config. `BUG_REPORT_URL` in `launcher-app/config.js` is that URL. If the constant is unset, the launcher sends nothing. The saved-project folder is confirmed (`TheGreatCircle_4_27`; a 5.8 build may rename it). TJ runs the steps below when the Discord channel is ready.
+The Worker address is not in git. The launcher reads `BUG_REPORT_URL` from gitignored `launcher-app/config.private.json`, or from the `BUG_REPORT_URL` environment variable when that variable is non-empty (the environment variable wins). If the value is empty or still a `.invalid` placeholder, the launcher sends nothing. The saved-project folder is confirmed (`TheGreatCircle_4_27`; a 5.8 build may rename it). TJ runs the steps below when the Discord channel is ready.
 
 ## What it accepts
 
@@ -89,8 +89,7 @@ From `bug-report-worker/`, with Wrangler 4 logged into the Sentient Solutions ac
    ```sh
    npx wrangler@4 deploy
    ```
-6. Point the launcher at the deployed Worker. This is already done: `BUG_REPORT_URL` in `launcher-app/config.js` is
-   the bug-report intake Worker, a Cloudflare Worker, set in the launcher config
+6. Point a launcher build at the Worker. Copy `launcher-app/config.private.example.json` to `launcher-app/config.private.json` and replace the placeholders, or export `BUG_REPORT_URL` and `ACCOUNT_SERVER_URL` in the shell that runs `npm run dist` / `npm run dist:installer`. The environment variable wins, and the pack step writes it into the copy of `config.private.json` that ships inside the app. Without either value, bug reports stay off and the account server is unset. Players do not get this until a launcher release, which needs TJ's OK.
 
 `wrangler secret put` publishes a new version. That is fine once the bindings above are real. This pull request does not run it.
 

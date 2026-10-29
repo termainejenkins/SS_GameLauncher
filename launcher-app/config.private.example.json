@@ -1,0 +1,4 @@
+{
+  "ACCOUNT_SERVER_URL": "https://account.example.invalid",
+  "BUG_REPORT_URL": "https://bug-report.example.invalid/api/bug-report"
+}
