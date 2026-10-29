@@ -2,7 +2,7 @@
 
 Private intake for the launcher's **Report a bug** form. The launcher zips logs and posts them to `POST /api/bug-report`. This Worker checks the upload, rate-limits it, stores it in a private R2 bucket, and posts a short note to Discord.
 
-The Worker is deployed at `https://tgc-bug-report.sentientsolutions.workers.dev/api/bug-report`. `BUG_REPORT_URL` in `launcher-app/config.js` is that URL. If the constant is unset, the launcher sends nothing. The saved-project folder is confirmed (`TheGreatCircle_4_27`; a 5.8 build may rename it). TJ runs the steps below when the Discord channel is ready.
+The Worker is deployed at the bug-report intake Worker, a Cloudflare Worker, set in the launcher config. `BUG_REPORT_URL` in `launcher-app/config.js` is that URL. If the constant is unset, the launcher sends nothing. The saved-project folder is confirmed (`TheGreatCircle_4_27`; a 5.8 build may rename it). TJ runs the steps below when the Discord channel is ready.
 
 ## What it accepts
 
@@ -73,7 +73,7 @@ From `bug-report-worker/`, with Wrangler 4 logged into the Sentient Solutions ac
    ```sh
    npx wrangler@4 r2 bucket lifecycle set tgc-bug-reports --file r2-lifecycle.json
    ```
-3. The production `RATE` id in `wrangler.toml` is the live namespace (`bb566c4909254ceb831e235bf40476d9`). `preview_id` is still the all-zero placeholder until a preview namespace exists:
+3. The production `RATE` id in `wrangler.toml` is the live namespace (a KV namespace). `preview_id` is still the all-zero placeholder until a preview namespace exists:
    ```sh
    npx wrangler@4 kv namespace create RATE --preview
    ```
@@ -90,7 +90,7 @@ From `bug-report-worker/`, with Wrangler 4 logged into the Sentient Solutions ac
    npx wrangler@4 deploy
    ```
 6. Point the launcher at the deployed Worker. This is already done: `BUG_REPORT_URL` in `launcher-app/config.js` is
-   `https://tgc-bug-report.sentientsolutions.workers.dev/api/bug-report`
+   the bug-report intake Worker, a Cloudflare Worker, set in the launcher config
 
 `wrangler secret put` publishes a new version. That is fine once the bindings above are real. This pull request does not run it.
 

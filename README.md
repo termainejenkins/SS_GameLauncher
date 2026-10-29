@@ -9,13 +9,13 @@ A modular game launcher for your UE4 game and web-based SPA game. Includes a bac
 ## Structure
 - `backend/` - Node.js + Express API server (news, updates, etc.)
 - `launcher-app/` - Electron desktop launcher (launches UE4 game, web game, shows news)
-- `bug-report-worker/` - Cloudflare Worker that receives opt-in bug reports, deployed at `https://tgc-bug-report.sentientsolutions.workers.dev/api/bug-report`
+- `bug-report-worker/` - Cloudflare Worker that receives opt-in bug reports, deployed at the bug-report intake Worker, a Cloudflare Worker, set in the launcher config
 
 ## Report a bug
 
 The launcher sidebar has **Report a bug**. The player writes a description, picks a category, and can attach a screenshot, the newest game log from the confirmed `%LOCALAPPDATA%\TheGreatCircle_4_27\Saved\Logs` folder (`cef*` logs are skipped), the newest `UECC-Windows-*` crash folder, and a short system summary. A preview lists those files and the upload size. Nothing leaves the PC until they press **Send**.
 
-Paths are scrubbed (`C:\Users\<name>\` becomes `C:\Users\<user>\`). The report is a zip of at most 25 MB posted to the Worker at `https://tgc-bug-report.sentientsolutions.workers.dev/api/bug-report` (`bug-report-worker/`), which stores it in a private R2 bucket and posts a short Discord note. Full deploy steps, rate limits, and the open TODOs are in [docs/bug-reports.md](docs/bug-reports.md). A launcher release still needs TJ's OK.
+Paths are scrubbed (`C:\Users\<name>\` becomes `C:\Users\<user>\`). The report is a zip of at most 25 MB posted to the Worker at the bug-report intake Worker, a Cloudflare Worker, set in the launcher config (`bug-report-worker/`), which stores it in a private R2 bucket and posts a short Discord note. Full deploy steps, rate limits, and the open TODOs are in [docs/bug-reports.md](docs/bug-reports.md). A launcher release still needs TJ's OK.
 
 ```
 npm test
