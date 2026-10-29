@@ -19,6 +19,7 @@ yarn-error.log*
 # Secrets (repo is public)
 .env
 .env.*
+launcher-app/config.private.json
 *.pem
 *.key
 *.p12

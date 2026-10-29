@@ -137,6 +137,7 @@
       "account.js",
       "dev-access.js",
       "config.js",
+      "config.private.json",
       "bug-report.js",
       "game-launch.js",
       "steam-ticket-worker.js",
@@ -169,6 +170,7 @@
       "icon": "assets/brand/ss_appicon_win_multi_v2.ico",
       "signAndEditExecutable": false
     },
+    "beforePack": "build/beforePack.js",
     "afterPack": "build/afterPack.js",
     "electronLanguages": [
       "en-US"

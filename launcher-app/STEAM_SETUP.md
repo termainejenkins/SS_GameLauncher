@@ -133,3 +133,5 @@ Open it in Notepad. Defaults:
 ## Building the launcher (for whoever builds it)
 
 From the `launcher-app` folder, run `npm install`, then `npm run dist`, then `npm run dist:check`. The output is in `dist\win-unpacked`.
+
+Before `npm run dist` (and before `npm run dist:installer`), supply the account-server and bug-report URLs. Copy `config.private.example.json` to `config.private.json` — that name is gitignored — and replace the placeholders, or export `ACCOUNT_SERVER_URL` and `BUG_REPORT_URL` in the same shell. The environment variable wins. The pack step writes those variables into the copy of `config.private.json` that is packed into the app, then puts your working tree back. If both are missing, the build still succeeds, but bug reports stay off and account-server calls fail the way they do when the server cannot be reached. `npm run dist:check` does not look for those URLs. Players only get this after a launcher release, which needs TJ's OK.

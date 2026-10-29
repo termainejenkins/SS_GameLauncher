@@ -32,7 +32,7 @@ The install id is a random UUID in the launcher's settings file. Only its SHA-25
 
 If this PC has an entitlement token, Send also posts that signed token as `entitlementToken`. Branch passwords are not sent. The Worker checks the signature and expiry. A valid token whose entitlements include `developer` tags the stored JSON with `"developer": true` and prefixes the Discord note with `[DEV]`. A missing, bad, or expired token does not reject the report and does not tag it. The token is not written to R2 or the logs.
 
-The Worker is deployed at the bug-report intake Worker, a Cloudflare Worker, set in the launcher config. `BUG_REPORT_URL` in `launcher-app/config.js` is that URL. If the constant is unset, Send refuses to open a connection and nothing is uploaded.
+The Worker address is not in git. `launcher-app/config.js` reads `BUG_REPORT_URL` from gitignored `launcher-app/config.private.json`, and from the `BUG_REPORT_URL` environment variable when that variable is non-empty (the environment variable wins). If the value is empty or still a `.invalid` placeholder, Send refuses to open a connection and nothing is uploaded.
 
 ## Where it lands
 
@@ -66,7 +66,7 @@ Do this from `bug-report-worker/` after `npx wrangler@4 login`. Do not put the w
    ```sh
    npx wrangler@4 deploy
    ```
-6. Point the launcher at the Worker. This is already done: `BUG_REPORT_URL` in `launcher-app/config.js` is the bug-report intake Worker, a Cloudflare Worker, set in the launcher config.
+6. Point a launcher build at the Worker. Copy `launcher-app/config.private.example.json` to `launcher-app/config.private.json` and replace the placeholders, or set `BUG_REPORT_URL` and `ACCOUNT_SERVER_URL` in the environment of the build. The environment variable wins. From `launcher-app/`, `npm run dist` and `npm run dist:installer` pack `config.private.json` into the app when it is present. A build with neither value leaves bug reports off and the account server unset. Players do not get this until a launcher release, and that release needs TJ's OK.
 
 Optional: `npx wrangler@4 secret put RATE_LIMIT_SALT` adds a pepper so a copy of the KV namespace cannot be matched back to an IP. The Worker runs without it.
 

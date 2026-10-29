@@ -9,7 +9,7 @@ A modular game launcher for your UE4 game and web-based SPA game. Includes a bac
 ## Structure
 - `backend/` - Node.js + Express API server (news, updates, etc.)
 - `launcher-app/` - Electron desktop launcher (launches UE4 game, web game, shows news)
-- `bug-report-worker/` - Cloudflare Worker that receives opt-in bug reports, deployed at the bug-report intake Worker, a Cloudflare Worker, set in the launcher config
+- `bug-report-worker/` - Cloudflare Worker that receives opt-in bug reports. The launcher learns its address from a gitignored private config (or an environment variable) at build time, not from a committed URL
 
 ## Report a bug
 
