@@ -11,6 +11,7 @@ const launch = require('./game-launch');
 const updater = require('./updater');
 const bugReport = require('./bug-report');
 const snapshot = require('./snapshot');
+const tgcContent = require('./tgc-content');
 
 const account = createAccountManager({ app, safeStorage, shell, utilityProcess });
 
@@ -300,6 +301,30 @@ function readSnapshot() {
 }
 
 ipcMain.handle('snapshot:read', () => readSnapshot());
+
+function contentOpts() {
+  return { isPackaged: app.isPackaged, env: process.env };
+}
+
+ipcMain.handle('tgc:lore', () => {
+  try { return tgcContent.loadLoreLibrary(contentOpts()); }
+  catch (_) { return { enabled: false, state: 'unreadable', unlocked: 0, total: 0, categories: [], ignored: [] }; }
+});
+
+ipcMain.handle('tgc:lore-image', (_event, id) => {
+  try { return tgcContent.readLoreImage(contentOpts(), id); }
+  catch (_) { return { ok: false, reason: 'unreadable' }; }
+});
+
+ipcMain.handle('tgc:photos', (_event, characterId) => {
+  try { return tgcContent.loadPhotoIndex(contentOpts(), characterId); }
+  catch (_) { return { enabled: false, state: 'unreadable', photos: [], truncated: false, photoCount: null }; }
+});
+
+ipcMain.handle('tgc:photo', (_event, characterId, file) => {
+  try { return tgcContent.readPhotoFile(contentOpts(), characterId, file); }
+  catch (_) { return { ok: false, reason: 'unreadable' }; }
+});
 
 // ---------------- developer tools (signed "developer" entitlement, fresh server fetch) ----------------
 // The page can hide the switch. These handlers are what actually allow the console.

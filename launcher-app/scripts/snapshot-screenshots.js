@@ -110,8 +110,29 @@ app.whenReady().then(async () => {
   await sleep(250);
   await captureWindow(win, wc, 'tgc-map.png');
 
+  await wc.executeJavaScript(`document.querySelector('#game-tablist [data-tab="library"]').click()`);
+  await waitFor(wc, `document.getElementById('game-view').dataset.libraryready === '1' && document.getElementById('tgc-lore-count').textContent.includes('4 / 10')`);
+  await sleep(200);
+  await captureWindow(win, wc, 'tgc-library.png');
+
+  await wc.executeJavaScript(`document.querySelector('#tgc-lore-list button:not([disabled])').click()`);
+  await waitFor(wc, `document.getElementById('game-view').dataset.readerready === '1' && document.getElementById('tgc-lore-title').textContent.length > 3`);
+  await sleep(200);
+  await captureWindow(win, wc, 'tgc-lore-reader.png');
+
+  await wc.executeJavaScript(`document.querySelector('#game-tablist [data-tab="gallery"]').click()`);
+  await waitFor(wc, `document.querySelectorAll('#tgc-photo-grid img[src^="data:"]').length >= 2`);
+  await sleep(200);
+  await captureWindow(win, wc, 'tgc-gallery.png');
+
+  await wc.executeJavaScript(`document.querySelector('#tgc-photo-grid button').click()`);
+  await waitFor(wc, `document.getElementById('game-view').dataset.photoready === '1' && document.getElementById('tgc-photo-caption').textContent.length > 0`);
+  await sleep(200);
+  await captureWindow(win, wc, 'tgc-photo.png');
+
   writeSnapshot(null);
   wc.send('snapshot:updated');
+  await wc.executeJavaScript(`document.querySelector('#game-tablist [data-tab="library"]').click()`);
   await waitFor(wc, `document.getElementById('game-view').dataset.state === 'missing' && document.getElementById('game-status').textContent.includes('Play once')`);
   await sleep(150);
   await captureWindow(win, wc, 'tgc-empty.png');

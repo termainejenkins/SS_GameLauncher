@@ -15,6 +15,7 @@ const BOUNDS = 200000;
 const BOUNDS_SIG = 123456789;
 // 2026-11-06 18:00 UTC. Fresh against a November 2026 clock; stale after 30 days.
 const SAVED_AT = Math.floor(Date.UTC(2026, 10, 6, 18, 0, 0) / 1000);
+const JASIRI_ID = '8E1F4A2C6B194D779A100C5E2F7B11A4';
 
 // Jasiri stands here. The PNG draws a crosshair at the same pixel the launcher formula produces.
 const JASIRI = { x: 123400, y: -55600 };
@@ -135,6 +136,53 @@ function history(rows) {
   return rows.map(([unixTime, type, value]) => ({ unixTime, type, value }));
 }
 
+function loreEntries() {
+  const places = [
+    ['waterhole', 'The south waterhole', 'The acacia shade holds the last open water this side of the ridge.', 'lore/waterhole.png'],
+    ['kopje', 'The north kopje', 'A stone stack the lions use when the grass is high.', null],
+    ['river', 'The dry river', 'It runs only after the long rain.', null],
+    ['ridge', 'East ridge', 'Zebra cross here at dusk.', null],
+  ];
+  const creatures = [
+    ['lion_pride', 'Jasiri\'s pride', 'Two adults and a half-grown cub hunt the waterhole.', null],
+    ['zebra_herd', 'The zebra', 'They drink in a line and leave when the grass moves.', null],
+    ['buffalo', 'The buffalo', 'A small herd keeps to the far bank.', null],
+  ];
+  const stories = [
+    ['acacia', 'Under the acacia', 'The first mark on the tree is older than this season.', null],
+    ['dusk_hunt', 'Dusk hunt', 'One hunt, just after the light dropped.', null],
+    ['first_circle', 'The first circle', 'The old name for the land inside the ridge.', null],
+  ];
+  const rows = [];
+  for (const [id, title, text, image] of places) rows.push({ id, title, category: 'Places', text, ...(image ? { image } : {}) });
+  for (const [id, title, text] of creatures) rows.push({ id, title, category: 'Creatures', text });
+  for (const [id, title, text] of stories) rows.push({ id, title, category: 'Stories', text });
+  return rows;
+}
+
+function writeLoreAndPhotos(pin) {
+  const loreDir = path.join(OUT, 'lore');
+  fs.mkdirSync(loreDir, { recursive: true });
+  fs.writeFileSync(path.join(loreDir, 'waterhole.png'), encodePng(64, 40, () => [90, 140, 150, 255]));
+  fs.writeFileSync(path.join(OUT, 'lore_catalog.json'), `${JSON.stringify({ version: 1, entries: loreEntries() }, null, 2)}\n`);
+
+  const photoDir = path.join(OUT, 'photos', JASIRI_ID);
+  fs.mkdirSync(photoDir, { recursive: true });
+  const shots = [
+    ['1793987990_1.png', 1793987990, 'Shade at the waterhole', JASIRI.x, JASIRI.y, [196, 154, 74, 255], 'dusk'],
+    ['1793900000_1.png', 1793900000, 'The east ridge', KIVULI.x, KIVULI.y, [120, 140, 70, 255], null],
+    ['1793800000_1.png', 1793800000, 'Tracks in the dust', LYANNE.x, LYANNE.y, [160, 120, 70, 255], null],
+  ];
+  const photos = shots.map(([file, unixTime, caption, x, y, color, timeOfDay]) => {
+    fs.writeFileSync(path.join(photoDir, file), encodePng(80, 48, (px) => (Math.abs(px - 40) < 2 ? [255, 255, 255, 255] : color)));
+    const row = { file, unixTime, caption, worldKey: WORLD, x, y };
+    if (timeOfDay) row.timeOfDay = timeOfDay;
+    return row;
+  });
+  fs.writeFileSync(path.join(photoDir, 'index.json'), `${JSON.stringify({ version: 1, photos }, null, 2)}\n`);
+  return { photoPin: pin };
+}
+
 function main() {
   const jasiriCell = cellIndex(JASIRI.x, JASIRI.y);
   const kivuliCell = cellIndex(KIVULI.x, KIVULI.y);
@@ -150,6 +198,7 @@ function main() {
     steamId: '76561198000000000',
     account: {
       personaName: 'Amani',
+      loreUnlocked: ['waterhole', 'lion_pride', 'acacia', 'dusk_hunt', 'not_in_catalog'],
       achievements: { Total_Lions_Hunted: 3, First_Drink: 1 },
       loreDiscoveredCount: 12,
       loreTotalCount: 80,
@@ -162,7 +211,7 @@ function main() {
     },
     characters: [
       {
-        characterId: '8E1F4A2C6B194D779A100C5E2F7B11A4',
+        characterId: JASIRI_ID,
         speciesId: 'Lion',
         speciesByte: 41,
         status: 'ALIVE',
@@ -181,6 +230,8 @@ function main() {
         vitals: { health: 0.82, stamina: 0.6, hunger: 0.3, thirst: 0.4, oxygen: 1, weight: 190, bodyTemp: 38 },
         base: { attack: 40, defense: 22, armor: 5, speed: 600 },
         statusEffects: ['buffs:2', 'boneBreak'],
+        photoCount: 3,
+        photoIndexPath: `photos/${JASIRI_ID}/index.json`,
         inventorySummary: { items: 3, maxSlots: 10 },
         history: history([
           [SAVED_AT - 86400 * 3, 'Hunt', 1],
@@ -273,6 +324,7 @@ function main() {
   fs.writeFileSync(path.join(OUT, 'launcher_snapshot.json'), `${JSON.stringify(snapshot, null, 2)}\n`);
   fs.writeFileSync(path.join(OUT, `tgc_worldmap_${WORLD}.json`), `${JSON.stringify(mapJson, null, 2)}\n`);
   fs.writeFileSync(path.join(OUT, `tgc_worldmap_${WORLD}.png`), png);
+  writeLoreAndPhotos(pin);
   const snapBytes = fs.statSync(path.join(OUT, 'launcher_snapshot.json')).size;
   console.log(JSON.stringify({
     out: OUT,

@@ -479,7 +479,7 @@ body.theme-light #account-entitlements li.tier-3 { color: #565d6b; }
 #game-view[hidden] { display: none; }
 .game-view-bar { display: flex; align-items: center; gap: 12px; }
 .game-view-bar h1 { margin: 0; flex: 1; font-family: 'Bebas Neue', 'Outfit', sans-serif; font-weight: 400; letter-spacing: 1.2px; font-size: 32px; }
-.game-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); }
+.game-tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--border); }
 .game-tab {
   appearance: none; background: transparent; border: 0; cursor: pointer;
   font: inherit; font-weight: 600; color: var(--muted);
@@ -494,6 +494,19 @@ body.theme-light #account-entitlements li.tier-3 { color: #565d6b; }
 .tgc-map-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .tgc-map-picker .btn.is-on { color: #1b0f05; background: linear-gradient(135deg, var(--gold), var(--orange)); border-color: transparent; }
 .game-view .map-stage { max-width: min(100%, 560px); }
+.tgc-lore-group { margin: 0 0 14px; }
+.tgc-lore-group h3 { margin: 0 0 8px; }
+.tgc-lore-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-bottom: 8px; text-align: left; }
+.tgc-lore-row:disabled { cursor: default; opacity: .85; }
+.tgc-photo-grid[hidden], #tgc-photo-filter[hidden], #tgc-lore-list[hidden] { display: none; }
+.tgc-reader { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.tgc-reader[hidden] { display: none; }
+.tgc-reader h3 { margin: 0; font-family: 'Bebas Neue', 'Outfit', sans-serif; font-weight: 400; letter-spacing: 1px; font-size: 28px; }
+.tgc-lore-img, .tgc-photo-full { max-width: min(100%, 640px); height: auto; border-radius: 10px; }
+.tgc-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.tgc-photo-thumb { padding: 0; overflow: hidden; }
+.tgc-photo-thumb img { display: block; width: 100%; height: 90px; object-fit: cover; background: #1a140c; }
+.tgc-photo-thumb span { display: block; padding: 6px 8px 8px; font-size: 12.5px; }
 
 /* ---------- profile summary inside a game tab ---------- */
 .nav button[hidden] { display: none; }

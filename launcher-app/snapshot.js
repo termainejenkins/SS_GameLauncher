@@ -285,8 +285,30 @@ function normalizeAccount(raw) {
     mostPlayedSpecies: mostPlayed(raw.mostPlayedSpecies),
     // Empty string means Steam was down at write time. Display falls through.
     personaName: shortString(raw.personaName) || null,
+    loreUnlocked: loreUnlockedIds(raw.loreUnlocked),
   };
   return account;
+}
+
+function loreUnlockedIds(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const id of raw) {
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= 500) break;
+  }
+  return out;
+}
+
+/** Snapshot may name the index. Only the canonical relative path is kept; anything else is dropped. */
+function acceptedPhotoIndexPath(characterId, raw) {
+  if (typeof characterId !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(characterId)) return null;
+  if (typeof raw !== 'string') return null;
+  const norm = raw.replace(/\\/g, '/');
+  return norm === `photos/${characterId}/index.json` ? norm : null;
 }
 
 function nonNegInt(value) {
@@ -400,6 +422,8 @@ function normalizeCharacter(raw) {
     statusEffects: normalizeStatusEffects(raw.statusEffects),
     inventory,
     history: normalizeHistory(raw.history),
+    photoCount: nonNegInt(raw.photoCount),
+    photoIndexPath: acceptedPhotoIndexPath(characterId, raw.photoIndexPath),
     // Dead characters never carry fog into the view. Alive-only keeps the 32 KB cap meaningful.
     mapDiscovery: raw.status === 'ALIVE' ? normalizeDiscovery(raw.mapDiscovery) : [],
   };
@@ -661,6 +685,8 @@ function presentCharacter(character, mapPackage) {
     statusEffects: character.statusEffects,
     inventory: character.inventory,
     history: character.history,
+    photoCount: character.photoCount,
+    photoIndexPath: character.photoIndexPath,
     map: characterMap(character, mapPackage),
   };
 }
@@ -688,6 +714,15 @@ function localAppDataFrom(env) {
   return path.join(os.homedir(), 'AppData', 'Local');
 }
 
+/** Same folder as launcher_snapshot.json. Packaged builds get enabled:false and no path. */
+function resolveDataDir({ isPackaged, env } = {}) {
+  const source = env || process.env;
+  if (!snapshotReadAllowed({ isPackaged: !!isPackaged, env: source })) return { enabled: false, dir: null };
+  const override = typeof source.SS_TGC_SNAPSHOT_DIR === 'string' ? source.SS_TGC_SNAPSHOT_DIR.trim() : '';
+  const dir = override || path.join(localAppDataFrom(source), ...cfg.ENTITLEMENT_DIR_PARTS);
+  return { enabled: true, dir };
+}
+
 /**
  * Read the snapshot the launcher should show.
  * opts.isPackaged + opts.env decide the gate. opts.fsImpl is for tests.
@@ -695,11 +730,11 @@ function localAppDataFrom(env) {
  */
 function loadLauncherSnapshot(opts = {}) {
   const env = opts.env || process.env;
-  if (!snapshotReadAllowed({ isPackaged: !!opts.isPackaged, env })) return disabledView();
+  const located = resolveDataDir({ isPackaged: !!opts.isPackaged, env });
+  if (!located.enabled) return disabledView();
   const fsImpl = opts.fsImpl || fs;
   const now = Number.isFinite(opts.now) ? opts.now : Math.floor(Date.now() / 1000);
-  const override = typeof env.SS_TGC_SNAPSHOT_DIR === 'string' ? env.SS_TGC_SNAPSHOT_DIR.trim() : '';
-  const dir = override || path.join(localAppDataFrom(env), ...cfg.ENTITLEMENT_DIR_PARTS);
+  const dir = located.dir;
   const parsed = readSnapshotFile(path.join(dir, SNAPSHOT_FILE_NAME), { now, fsImpl });
   if (!parsed.ok) {
     return {
@@ -765,6 +800,8 @@ module.exports = {
   WORLD_KEY_RE,
   MESSAGES,
   snapshotReadAllowed,
+  resolveDataDir,
+  acceptedPhotoIndexPath,
   isSafeWorldKey,
   mapPackageNames,
   worldToMapPixel,

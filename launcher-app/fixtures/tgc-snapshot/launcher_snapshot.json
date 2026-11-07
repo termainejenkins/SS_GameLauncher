@@ -10,6 +10,13 @@
   "steamId": "76561198000000000",
   "account": {
     "personaName": "Amani",
+    "loreUnlocked": [
+      "waterhole",
+      "lion_pride",
+      "acacia",
+      "dusk_hunt",
+      "not_in_catalog"
+    ],
     "achievements": {
       "Total_Lions_Hunted": 3,
       "First_Drink": 1
@@ -64,6 +71,8 @@
         "buffs:2",
         "boneBreak"
       ],
+      "photoCount": 3,
+      "photoIndexPath": "photos/8E1F4A2C6B194D779A100C5E2F7B11A4/index.json",
       "inventorySummary": {
         "items": 3,
         "maxSlots": 10

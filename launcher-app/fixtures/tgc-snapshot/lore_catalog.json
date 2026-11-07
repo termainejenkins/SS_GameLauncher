@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "waterhole",
+      "title": "The south waterhole",
+      "category": "Places",
+      "text": "The acacia shade holds the last open water this side of the ridge.",
+      "image": "lore/waterhole.png"
+    },
+    {
+      "id": "kopje",
+      "title": "The north kopje",
+      "category": "Places",
+      "text": "A stone stack the lions use when the grass is high."
+    },
+    {
+      "id": "river",
+      "title": "The dry river",
+      "category": "Places",
+      "text": "It runs only after the long rain."
+    },
+    {
+      "id": "ridge",
+      "title": "East ridge",
+      "category": "Places",
+      "text": "Zebra cross here at dusk."
+    },
+    {
+      "id": "lion_pride",
+      "title": "Jasiri's pride",
+      "category": "Creatures",
+      "text": "Two adults and a half-grown cub hunt the waterhole."
+    },
+    {
+      "id": "zebra_herd",
+      "title": "The zebra",
+      "category": "Creatures",
+      "text": "They drink in a line and leave when the grass moves."
+    },
+    {
+      "id": "buffalo",
+      "title": "The buffalo",
+      "category": "Creatures",
+      "text": "A small herd keeps to the far bank."
+    },
+    {
+      "id": "acacia",
+      "title": "Under the acacia",
+      "category": "Stories",
+      "text": "The first mark on the tree is older than this season."
+    },
+    {
+      "id": "dusk_hunt",
+      "title": "Dusk hunt",
+      "category": "Stories",
+      "text": "One hunt, just after the light dropped."
+    },
+    {
+      "id": "first_circle",
+      "title": "The first circle",
+      "category": "Stories",
+      "text": "The old name for the land inside the ridge."
+    }
+  ]
+}

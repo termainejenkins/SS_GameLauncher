@@ -736,6 +736,8 @@ window.onload = () => {
         { id: 'overview', label: 'Overview' },
         { id: 'characters', label: 'Characters' },
         { id: 'map', label: 'Map' },
+        { id: 'library', label: 'Library' },
+        { id: 'gallery', label: 'Gallery' },
       ],
     },
   };
@@ -744,6 +746,8 @@ window.onload = () => {
   let gameTab = null;
   let snapshotView = null;
   let selectedId = null;
+  let photoFocus = null;
+  let loreView = null;
 
   function openGame(id) {
     const game = GAME_VIEWS[id];
@@ -809,6 +813,8 @@ window.onload = () => {
       panel.hidden = !(panel.dataset.gamePanel === openGameId && panel.dataset.tab === tabId);
     });
     if (tabId === 'map') drawMap();
+    else if (tabId === 'library') loadLorePanel();
+    else if (tabId === 'gallery') loadGalleryPanel();
     else if (gameView) gameView.dataset.mapready = '1';
   }
 
@@ -1084,6 +1090,7 @@ window.onload = () => {
       btn.textContent = card.name;
       btn.onclick = () => {
         selectedId = card.characterId;
+        photoFocus = null;
         paintRoster();
         paintDetail();
         paintMapPicker();
@@ -1129,6 +1136,8 @@ window.onload = () => {
     pin.hidden = true;
     const pack = card && card.map && card.map.worldKey ? snapshotView.maps[card.map.worldKey] : null;
     const lines = [];
+    const focused = photoFocus && card && card.map && card.map.worldKey === photoFocus.worldKey && photoFocus.pin;
+    if (focused && photoFocus.caption) lines.push(photoFocus.caption);
     if (card && card.location && card.location.region) lines.push(card.location.region);
     if (card && card.location && Number.isFinite(card.location.updatedUnix)) lines.push(`as of ${formatUnix(card.location.updatedUnix)}`);
     if (card && card.map && card.map.mode === 'fog' && Number.isFinite(card.map.exploredPercent)) lines.push(formatExplored(card.map.exploredPercent));
@@ -1158,10 +1167,11 @@ window.onload = () => {
           ctx.drawImage(img, x, y, rw, rh, x, y, rw, rh);
         }
       }
-      if (card.map.pin) {
+      const point = focused ? photoFocus.pin : card.map.pin;
+      if (point) {
         pin.hidden = false;
-        pin.style.left = `${(card.map.pin.u / w) * 100}%`;
-        pin.style.top = `${(card.map.pin.v / h) * 100}%`;
+        pin.style.left = `${(point.u / w) * 100}%`;
+        pin.style.top = `${(point.v / h) * 100}%`;
       }
       if (gameView) gameView.dataset.mapready = '1';
     };
@@ -1194,9 +1204,13 @@ window.onload = () => {
     const overview = document.getElementById('tgc-overview-body');
     const characters = document.getElementById('tgc-characters-body');
     const mapBody = document.getElementById('tgc-map-body');
+    const libraryBody = document.getElementById('tgc-library-body');
+    const galleryBody = document.getElementById('tgc-gallery-body');
     if (overview) overview.hidden = blocking;
     if (characters) characters.hidden = blocking;
     if (mapBody) mapBody.hidden = blocking;
+    if (libraryBody) libraryBody.hidden = blocking;
+    if (galleryBody) galleryBody.hidden = blocking;
     if (blocking) return;
     const cards = snapshotView.alive.concat(snapshotView.graveyard);
     const known = cards.some((c) => c.characterId === selectedId);
@@ -1207,6 +1221,186 @@ window.onload = () => {
     paintDetail();
     paintMapPicker();
   }
+
+  function paintLore() {
+    const list = document.getElementById('tgc-lore-list');
+    const reader = document.getElementById('tgc-lore-reader');
+    const empty = document.getElementById('tgc-lore-empty');
+    const count = document.getElementById('tgc-lore-count');
+    list.textContent = '';
+    reader.hidden = true;
+    list.hidden = false;
+    if (!loreView || loreView.state !== 'ok') {
+      empty.hidden = false;
+      empty.textContent = loreView && loreView.state === 'missing' ? 'No lore catalog yet.' : 'The lore catalog could not be read.';
+      count.textContent = '';
+      return;
+    }
+    empty.hidden = true;
+    count.textContent = `${loreView.unlocked} / ${loreView.total} unlocked`;
+    for (const group of loreView.categories || []) {
+      const block = document.createElement('section');
+      block.className = 'tgc-lore-group';
+      const heading = document.createElement('h3');
+      heading.className = 'tgc-sub';
+      heading.textContent = group.category;
+      block.appendChild(heading);
+      for (const entry of group.entries) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tgc-card tgc-lore-row';
+        btn.disabled = !!entry.locked;
+        const title = document.createElement('span');
+        title.className = 'tgc-card-name';
+        title.textContent = entry.title;
+        const sub = document.createElement('span');
+        sub.className = 'tgc-card-sub';
+        sub.textContent = entry.category;
+        btn.append(title, sub);
+        if (!entry.locked) btn.onclick = () => openLore(entry);
+        block.appendChild(btn);
+      }
+      list.appendChild(block);
+    }
+  }
+
+  async function openLore(entry) {
+    document.getElementById('tgc-lore-list').hidden = true;
+    const reader = document.getElementById('tgc-lore-reader');
+    reader.hidden = false;
+    document.getElementById('tgc-lore-cat').textContent = entry.category;
+    document.getElementById('tgc-lore-title').textContent = entry.title;
+    document.getElementById('tgc-lore-text').textContent = entry.text || '';
+    const img = document.getElementById('tgc-lore-img');
+    img.hidden = true;
+    img.removeAttribute('src');
+    if (entry.image && launcher.getLoreImage) {
+      try {
+        const got = await launcher.getLoreImage(entry.id);
+        if (got && got.ok && got.dataUrl) {
+          img.src = got.dataUrl;
+          img.hidden = false;
+        }
+      } catch (_) { /* missing art stays hidden */ }
+    }
+    if (gameView) gameView.dataset.readerready = '1';
+  }
+
+  document.getElementById('tgc-lore-back').onclick = () => {
+    document.getElementById('tgc-lore-reader').hidden = true;
+    document.getElementById('tgc-lore-list').hidden = false;
+    if (gameView) gameView.dataset.readerready = '';
+  };
+
+  async function loadLorePanel() {
+    if (!launcher.getLore || !gameView) return;
+    gameView.dataset.libraryready = '';
+    try { loreView = await launcher.getLore(); }
+    catch (_) { loreView = { state: 'unreadable', categories: [], unlocked: 0, total: 0 }; }
+    paintLore();
+    gameView.dataset.libraryready = '1';
+  }
+
+  function paintPhotoFilter() {
+    const bar = document.getElementById('tgc-photo-filter');
+    bar.textContent = '';
+    if (!snapshotView) return;
+    const cards = (snapshotView.alive || []).concat(snapshotView.graveyard || []);
+    cards.forEach((card) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-sm' + (card.characterId === selectedId ? ' is-on' : '');
+      btn.textContent = card.name;
+      btn.onclick = () => {
+        selectedId = card.characterId;
+        loadGalleryPanel();
+      };
+      bar.appendChild(btn);
+    });
+  }
+
+  async function loadGalleryPanel() {
+    if (!gameView) return;
+    gameView.dataset.galleryready = '';
+    document.getElementById('tgc-photo-view').hidden = true;
+    document.getElementById('tgc-photo-grid').hidden = false;
+    paintPhotoFilter();
+    const grid = document.getElementById('tgc-photo-grid');
+    const empty = document.getElementById('tgc-photo-empty');
+    grid.textContent = '';
+    const card = selectedCard();
+    if (!card || !launcher.getPhotos) {
+      empty.hidden = false;
+      empty.textContent = 'No photos yet.';
+      gameView.dataset.galleryready = '1';
+      return;
+    }
+    let listed = { photos: [] };
+    try { listed = await launcher.getPhotos(card.characterId); }
+    catch (_) { listed = { photos: [] }; }
+    const photos = listed && listed.photos ? listed.photos : [];
+    empty.hidden = photos.length > 0;
+    empty.textContent = 'No photos yet.';
+    for (const photo of photos) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tgc-card tgc-photo-thumb';
+      const img = document.createElement('img');
+      img.alt = photo.caption || 'Photo';
+      const label = document.createElement('span');
+      label.textContent = photo.caption || 'Photo';
+      btn.append(img, label);
+      btn.onclick = () => openPhoto(card.characterId, photo, img.src);
+      grid.appendChild(btn);
+      if (launcher.getPhoto) {
+        launcher.getPhoto(card.characterId, photo.file).then((got) => {
+          if (got && got.ok && got.dataUrl) img.src = got.dataUrl;
+        }).catch(() => {});
+      }
+    }
+    gameView.dataset.galleryready = '1';
+  }
+
+  function openPhoto(characterId, photo, src) {
+    document.getElementById('tgc-photo-grid').hidden = true;
+    document.getElementById('tgc-photo-filter').hidden = true;
+    const view = document.getElementById('tgc-photo-view');
+    view.hidden = false;
+    const img = document.getElementById('tgc-photo-full');
+    img.src = src || '';
+    img.alt = photo.caption || 'Photo';
+    document.getElementById('tgc-photo-caption').textContent = photo.caption || 'Photo';
+    const bits = [];
+    if (Number.isFinite(photo.unixTime)) bits.push(formatUnix(photo.unixTime));
+    if (photo.worldKey) bits.push(photo.worldKey);
+    if (photo.timeOfDay) bits.push(photo.timeOfDay);
+    if (photo.weather) bits.push(photo.weather);
+    document.getElementById('tgc-photo-meta').textContent = bits.join(' · ');
+    const mapBtn = document.getElementById('tgc-photo-map');
+    if (photo.pin && photo.worldKey) {
+      mapBtn.hidden = false;
+      mapBtn.onclick = () => {
+        photoFocus = { worldKey: photo.worldKey, pin: photo.pin, caption: photo.caption || 'Photo' };
+        showGameTab('map');
+      };
+    } else {
+      mapBtn.hidden = true;
+      mapBtn.onclick = null;
+    }
+    if (!src && launcher.getPhoto) {
+      launcher.getPhoto(characterId, photo.file).then((got) => {
+        if (got && got.ok && got.dataUrl) img.src = got.dataUrl;
+      }).catch(() => {});
+    }
+    if (gameView) gameView.dataset.photoready = '1';
+  }
+
+  document.getElementById('tgc-photo-back').onclick = () => {
+    document.getElementById('tgc-photo-view').hidden = true;
+    document.getElementById('tgc-photo-grid').hidden = false;
+    document.getElementById('tgc-photo-filter').hidden = false;
+    if (gameView) gameView.dataset.photoready = '';
+  };
 
   document.getElementById('tgc-last').onclick = () => {
     if (!snapshotView || !snapshotView.lastCharacterId) return;
