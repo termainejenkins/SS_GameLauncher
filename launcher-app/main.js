@@ -10,6 +10,7 @@ const { handleDebugConsoleToggle } = require('./dev-access');
 const launch = require('./game-launch');
 const updater = require('./updater');
 const bugReport = require('./bug-report');
+const snapshot = require('./snapshot');
 
 const account = createAccountManager({ app, safeStorage, shell, utilityProcess });
 
@@ -89,6 +90,7 @@ function createWindow() {
     try { mainWindow.webContents.closeDevTools(); } catch (_) { /* ignore */ }
   });
 
+  mainWindow.on('focus', () => pushSnapshot());
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 }
 
@@ -162,6 +164,7 @@ function afterGameStarted(r) {
     gameChild = r.child;
     r.child.once('exit', () => {
       gameChild = null;
+      pushSnapshot(); // the game may have just rewritten the local summary
       if (mode === 'close-and-wait') app.quit();
       else if (mode === 'minimize' && mainWindow && !mainWindow.isDestroyed()) mainWindow.restore();
     });
@@ -237,6 +240,40 @@ ipcMain.handle('account:cancel-link', () => {
   account.cancelLink();
   return true;
 });
+
+// Local profile summary. Packaged builds do not read the file (spec §6: the privacy
+// line has to be live before any release that does). The renderer only displays this.
+function pushSnapshot() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try { mainWindow.webContents.send('snapshot:updated'); } catch (_) { /* closing */ }
+}
+
+function readSnapshot() {
+  try {
+    return snapshot.loadLauncherSnapshot({
+      isPackaged: app.isPackaged,
+      env: process.env,
+      now: Math.floor(Date.now() / 1000),
+    });
+  } catch (_) {
+    return {
+      enabled: snapshot.snapshotReadAllowed({ isPackaged: app.isPackaged, env: process.env }),
+      state: 'unreadable',
+      message: snapshot.MESSAGES.unreadable,
+      savedAtUnix: null,
+      saveSlotIndex: null,
+      steamId: null,
+      game: null,
+      personaName: null,
+      account: null,
+      alive: [],
+      graveyard: [],
+      maps: {},
+    };
+  }
+}
+
+ipcMain.handle('snapshot:read', () => readSnapshot());
 
 // ---------------- developer tools (signed "developer" entitlement, fresh server fetch) ----------------
 // The page can hide the switch. These handlers are what actually allow the console.

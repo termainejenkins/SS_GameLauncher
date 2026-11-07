@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('launcher', {
   getDevStatus: () => ipcRenderer.invoke('dev:status'),
   toggleDebugConsole: (open) => ipcRenderer.invoke('dev:toggle-console', !!open),
 
+  // Local profile summary (launcher_snapshot.json). Main decides whether reading is allowed.
+  getSnapshot: () => ipcRenderer.invoke('snapshot:read'),
+  onSnapshotUpdated: (cb) => on('snapshot:updated', cb),
+
   // Launcher self-update (website install only; the Steam copy is updated by Steam)
   getUpdateStatus: () => ipcRenderer.invoke('updater:status'),
   installUpdate: () => ipcRenderer.invoke('updater:install'),

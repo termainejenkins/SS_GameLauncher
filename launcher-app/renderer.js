@@ -726,6 +726,349 @@ window.onload = () => {
     });
   }
 
+  // Local profile summary. The main process refuses the read in a packaged build.
+  const tgcRoot = document.getElementById('characters');
+  const tgcNav = document.getElementById('nav-characters');
+  let snapshotView = null;
+  let selectedId = null;
+  let mapTab = false;
+
+  function formatUnix(sec) {
+    if (!Number.isFinite(sec)) return '';
+    const date = new Date(sec * 1000);
+    if (Number.isNaN(date.getTime())) return '';
+    try { return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+    catch (_) { return date.toLocaleString(); }
+  }
+  function formatVital(value) {
+    if (!Number.isFinite(value)) return '';
+    if (Number.isInteger(value)) return value.toLocaleString();
+    return value.toFixed(2);
+  }
+  function formatExplored(percent) {
+    const rounded = Math.round(percent * 10) / 10;
+    const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    return `${text}% explored`;
+  }
+  function clearNode(el) { if (el) el.textContent = ''; }
+  function selectedCard() {
+    if (!snapshotView) return null;
+    const all = snapshotView.alive.concat(snapshotView.graveyard);
+    return all.find((c) => c.characterId === selectedId) || all[0] || null;
+  }
+  function chip(text) {
+    const span = document.createElement('span');
+    span.className = 'tgc-chip';
+    span.textContent = text;
+    return span;
+  }
+  function statBox(label, value) {
+    const box = document.createElement('div');
+    box.className = 'tgc-stat';
+    const k = document.createElement('span');
+    k.className = 'k';
+    k.textContent = label;
+    const v = document.createElement('span');
+    v.className = 'v';
+    v.textContent = value;
+    box.append(k, v);
+    return box;
+  }
+
+  function renderProfile(view) {
+    const meta = document.getElementById('tgc-account-meta');
+    const persona = document.getElementById('tgc-persona');
+    const stats = document.getElementById('tgc-account-stats');
+    const achievements = document.getElementById('tgc-achievements');
+    clearNode(meta); clearNode(stats); clearNode(achievements);
+    persona.hidden = true;
+    persona.textContent = '';
+    const blocking = view.state !== 'ok' && view.state !== 'stale';
+    if (blocking) return;
+    if (view.personaName) {
+      persona.hidden = false;
+      persona.textContent = view.personaName;
+    }
+    const bits = [];
+    if (view.game && view.game.build) bits.push(view.game.build);
+    if (view.game && view.game.branch) bits.push(view.game.branch);
+    if (view.saveSlotIndex !== null && view.saveSlotIndex !== undefined) bits.push(`slot ${view.saveSlotIndex}`);
+    if (view.steamId && !view.personaName) bits.push(`Steam ${view.steamId}`);
+    if (Number.isFinite(view.savedAtUnix)) bits.push(`saved ${formatUnix(view.savedAtUnix)}`);
+    meta.textContent = bits.join(' · ');
+    const account = view.account;
+    if (!account) return;
+    const lore = account.loreDiscoveredCount;
+    const loreTotal = account.loreTotalCount;
+    if (lore !== null || loreTotal !== null) {
+      let text = lore === null ? '—' : String(lore);
+      if (loreTotal !== null) text += ` / ${loreTotal}`;
+      if (lore !== null && loreTotal) {
+        const pct = Math.round((lore / loreTotal) * 1000) / 10;
+        text += ` (${Number.isInteger(pct) ? pct : pct.toFixed(1)}%)`;
+      }
+      stats.appendChild(statBox('Lore', text));
+    }
+    if (account.photoCount !== null) stats.appendChild(statBox('Photos', String(account.photoCount)));
+    if (account.lifetimeSurvivalTime !== null) stats.appendChild(statBox('Lifetime survival', account.lifetimeSurvivalTime.toLocaleString()));
+    if (account.lifetimeCharactersCreated !== null) stats.appendChild(statBox('Characters created', String(account.lifetimeCharactersCreated)));
+    if (account.lifetimeXP !== null) stats.appendChild(statBox('Lifetime XP', account.lifetimeXP.toLocaleString()));
+    if (account.longestSurvivalTimeDays !== null) stats.appendChild(statBox('Longest survival (days)', String(account.longestSurvivalTimeDays)));
+    if (account.mostPlayedSpecies !== null && account.mostPlayedSpecies !== undefined) {
+      const species = typeof account.mostPlayedSpecies === 'number' ? `#${account.mostPlayedSpecies}` : account.mostPlayedSpecies;
+      stats.appendChild(statBox('Most played', species));
+    }
+    for (const row of account.achievements || []) {
+      achievements.appendChild(chip(`${row.name.replace(/_/g, ' ')} · ${row.count}`));
+    }
+  }
+
+  function characterButton(card, grave) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = grave ? 'tgc-grave' : 'tgc-card';
+    btn.dataset.id = card.characterId;
+    if (card.characterId === selectedId) btn.classList.add('is-selected');
+    const name = document.createElement('div');
+    name.className = grave ? 'tgc-grave-name' : 'tgc-card-name';
+    name.textContent = card.name;
+    const sub = document.createElement('div');
+    sub.className = grave ? 'tgc-grave-sub' : 'tgc-card-sub';
+    if (grave) {
+      const days = card.daysSurvived === null ? 'Dead' : `Died after ${card.daysSurvived} days`;
+      sub.textContent = [card.speciesId || 'Unknown', days].join(' · ');
+    } else {
+      const parts = [];
+      if (card.speciesId) parts.push(card.speciesId);
+      if (card.level !== null) parts.push(`level ${card.level}`);
+      if (card.daysSurvived !== null) parts.push(`${card.daysSurvived} days`);
+      sub.textContent = parts.join(' · ') || 'Alive';
+    }
+    btn.append(name, sub);
+    btn.onclick = () => {
+      selectedId = card.characterId;
+      paintRoster();
+      paintDetail();
+    };
+    return btn;
+  }
+
+  function paintRoster() {
+    const roster = document.getElementById('tgc-roster');
+    const grave = document.getElementById('tgc-graveyard');
+    clearNode(roster); clearNode(grave);
+    const alive = snapshotView.alive || [];
+    const dead = snapshotView.graveyard || [];
+    alive.forEach((card) => roster.appendChild(characterButton(card, false)));
+    dead.forEach((card) => grave.appendChild(characterButton(card, true)));
+    document.getElementById('tgc-roster-empty').hidden = alive.length > 0;
+    document.getElementById('tgc-grave-empty').hidden = dead.length > 0;
+    const meta = document.getElementById('tgc-characters-meta');
+    meta.textContent = alive.length || dead.length ? `${alive.length} alive · ${dead.length} in the graveyard` : '';
+  }
+
+  function barRow(label, value) {
+    const row = document.createElement('div');
+    const top = document.createElement('div');
+    top.className = 'tgc-bar-top';
+    const name = document.createElement('span');
+    name.textContent = label;
+    const num = document.createElement('span');
+    num.textContent = formatVital(value);
+    top.append(name, num);
+    row.appendChild(top);
+    if (typeof value === 'number' && value >= 0 && value <= 1) {
+      const track = document.createElement('div');
+      track.className = 'tgc-track';
+      const fill = document.createElement('span');
+      fill.style.width = `${Math.max(0, Math.min(100, value * 100))}%`;
+      track.appendChild(fill);
+      row.appendChild(track);
+    }
+    return row;
+  }
+
+  function numberBox(label, value) {
+    const box = document.createElement('div');
+    box.className = 'tgc-num';
+    const k = document.createElement('span');
+    k.className = 'k';
+    k.textContent = label;
+    const v = document.createElement('span');
+    v.className = 'v';
+    v.textContent = formatVital(value);
+    box.append(k, v);
+    return box;
+  }
+
+  function paintDetail() {
+    const card = selectedCard();
+    const detail = document.getElementById('tgc-detail');
+    if (!card) { detail.hidden = true; return; }
+    selectedId = card.characterId;
+    detail.hidden = false;
+    document.getElementById('tgc-detail-name').textContent = card.name;
+    const subParts = [];
+    if (card.speciesId) subParts.push(card.speciesId);
+    else if (card.speciesByte !== null) subParts.push(`species ${card.speciesByte}`);
+    if (card.level !== null) subParts.push(`level ${card.level}`);
+    if (card.status === 'DEAD') subParts.push(card.daysSurvived === null ? 'Dead' : `died after ${card.daysSurvived} days`);
+    else if (card.daysSurvived !== null) subParts.push(`${card.daysSurvived} days survived`);
+    const loc = card.location;
+    if (loc && loc.region) subParts.push(loc.region);
+    document.getElementById('tgc-detail-sub').textContent = subParts.join(' · ');
+
+    const vitals = document.getElementById('tgc-vitals');
+    const base = document.getElementById('tgc-base');
+    const effects = document.getElementById('tgc-effects');
+    const history = document.getElementById('tgc-history');
+    clearNode(vitals); clearNode(base); clearNode(effects); clearNode(history);
+    const bars = [['health', 'Health'], ['stamina', 'Stamina'], ['hunger', 'Hunger'], ['thirst', 'Thirst'], ['oxygen', 'Oxygen']];
+    const nums = [['weight', 'Weight'], ['bodyTemp', 'Body temp'], ['sleep', 'Sleep'], ['calories', 'Calories']];
+    for (const [key, label] of bars) {
+      if (card.vitals && Object.prototype.hasOwnProperty.call(card.vitals, key)) vitals.appendChild(barRow(label, card.vitals[key]));
+    }
+    for (const [key, label] of nums) {
+      if (card.vitals && Object.prototype.hasOwnProperty.call(card.vitals, key)) vitals.appendChild(barRow(label, card.vitals[key]));
+    }
+    for (const [key, label] of [['attack', 'Attack'], ['defense', 'Defense'], ['armor', 'Armor'], ['speed', 'Speed'], ['hp', 'HP'], ['intelligence', 'Intelligence']]) {
+      if (card.base && Object.prototype.hasOwnProperty.call(card.base, key)) base.appendChild(numberBox(label, card.base[key]));
+    }
+    for (const label of card.statusEffects || []) effects.appendChild(chip(label));
+    const inv = document.getElementById('tgc-inventory');
+    if (card.inventory && (card.inventory.items !== null || card.inventory.maxSlots !== null)) {
+      const items = card.inventory.items === null ? '—' : String(card.inventory.items);
+      const max = card.inventory.maxSlots === null ? '—' : String(card.inventory.maxSlots);
+      inv.textContent = `Carrying ${items} / ${max}`;
+    } else inv.textContent = '';
+    const rows = card.history || [];
+    document.getElementById('tgc-history-empty').hidden = rows.length > 0;
+    for (const entry of rows) {
+      const li = document.createElement('li');
+      const what = document.createElement('span');
+      what.textContent = `${entry.type} · ${entry.value}`;
+      const when = document.createElement('span');
+      when.className = 'when';
+      when.textContent = formatUnix(entry.unixTime);
+      li.append(what, when);
+      history.appendChild(li);
+    }
+    showMapTab(mapTab);
+  }
+
+  function showMapTab(on) {
+    mapTab = !!on;
+    document.getElementById('tgc-panel-map').hidden = !mapTab;
+    document.getElementById('tgc-panel-detail').hidden = mapTab;
+    const detailBtn = document.getElementById('tgc-tab-detail');
+    const mapBtn = document.getElementById('tgc-tab-map');
+    detailBtn.classList.toggle('is-on', !mapTab);
+    mapBtn.classList.toggle('is-on', mapTab);
+    detailBtn.setAttribute('aria-selected', mapTab ? 'false' : 'true');
+    mapBtn.setAttribute('aria-selected', mapTab ? 'true' : 'false');
+    if (mapTab) drawMap();
+    else tgcRoot.dataset.mapready = '1';
+  }
+
+  function drawMap() {
+    const card = selectedCard();
+    const canvas = document.getElementById('tgc-map');
+    const pin = document.getElementById('tgc-map-pin');
+    const caption = document.getElementById('tgc-map-caption');
+    tgcRoot.dataset.mapready = '';
+    pin.hidden = true;
+    const pack = card && card.map && card.map.worldKey ? snapshotView.maps[card.map.worldKey] : null;
+    const lines = [];
+    if (card && card.location && card.location.region) lines.push(card.location.region);
+    if (card && card.location && Number.isFinite(card.location.updatedUnix)) lines.push(`as of ${formatUnix(card.location.updatedUnix)}`);
+    if (card && card.map && card.map.mode === 'fog' && Number.isFinite(card.map.exploredPercent)) lines.push(formatExplored(card.map.exploredPercent));
+    if (card && card.map && card.map.message) lines.push(card.map.message);
+    if (!card || !card.map || (card.map.mode !== 'fog' && card.map.mode !== 'pin') || !pack || !pack.imageDataUrl) {
+      caption.textContent = lines.join(' · ') || 'No map data yet.';
+      tgcRoot.dataset.mapready = '1';
+      return;
+    }
+    caption.textContent = lines.join(' · ');
+    const img = new Image();
+    img.onload = () => {
+      const w = pack.imageW || img.naturalWidth;
+      const h = pack.imageH || img.naturalHeight;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      if (card.map.mode === 'fog' && card.map.fog && card.map.fog.rects) {
+        ctx.fillStyle = 'rgba(8, 6, 4, 0.72)';
+        ctx.fillRect(0, 0, w, h);
+        for (const rect of card.map.fog.rects) {
+          const x = Math.min(rect.x, rect.x + rect.w);
+          const y = Math.min(rect.y, rect.y + rect.h);
+          const rw = Math.abs(rect.w);
+          const rh = Math.abs(rect.h);
+          ctx.drawImage(img, x, y, rw, rh, x, y, rw, rh);
+        }
+      }
+      if (card.map.pin) {
+        pin.hidden = false;
+        pin.style.left = `${(card.map.pin.u / w) * 100}%`;
+        pin.style.top = `${(card.map.pin.v / h) * 100}%`;
+      }
+      tgcRoot.dataset.mapready = '1';
+    };
+    img.onerror = () => {
+      caption.textContent = 'No map data yet.';
+      tgcRoot.dataset.mapready = '1';
+    };
+    img.src = pack.imageDataUrl;
+  }
+
+  function renderSnapshot(view) {
+    if (!tgcRoot || !tgcNav) return;
+    snapshotView = view;
+    if (!view || !view.enabled) {
+      tgcRoot.hidden = true;
+      tgcNav.hidden = true;
+      tgcRoot.dataset.state = (view && view.state) || 'disabled';
+      tgcRoot.dataset.mapready = '1';
+      return;
+    }
+    tgcRoot.hidden = false;
+    tgcNav.hidden = false;
+    tgcRoot.dataset.state = view.state;
+    const banner = document.getElementById('tgc-banner');
+    const blocking = view.state !== 'ok' && view.state !== 'stale';
+    if (view.message) {
+      banner.hidden = false;
+      banner.textContent = view.message;
+      banner.classList.toggle('warn', view.state === 'stale');
+    } else {
+      banner.hidden = true;
+      banner.textContent = '';
+    }
+    document.getElementById('tgc-account').hidden = blocking;
+    document.querySelector('.tgc-characters').hidden = blocking;
+    if (blocking) {
+      tgcRoot.dataset.mapready = '1';
+      return;
+    }
+    const known = snapshotView.alive.concat(snapshotView.graveyard).some((c) => c.characterId === selectedId);
+    if (!known) selectedId = (snapshotView.alive[0] || snapshotView.graveyard[0] || {}).characterId || null;
+    renderProfile(view);
+    paintRoster();
+    paintDetail();
+  }
+
+  document.getElementById('tgc-tab-detail').onclick = () => showMapTab(false);
+  document.getElementById('tgc-tab-map').onclick = () => showMapTab(true);
+
+  async function loadSnapshot() {
+    if (!launcher.getSnapshot) return;
+    try { renderSnapshot(await launcher.getSnapshot()); }
+    catch (_) { renderSnapshot({ enabled: false, state: 'disabled' }); }
+  }
+  if (launcher.onSnapshotUpdated) launcher.onSnapshotUpdated(() => { loadSnapshot(); });
+  loadSnapshot();
+
   // Sidebar navigation (scrolls the main column; no page navigation)
   const navButtons = document.querySelectorAll('.nav [data-scroll]');
   navButtons.forEach(btn => {
