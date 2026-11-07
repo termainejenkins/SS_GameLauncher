@@ -93,12 +93,19 @@ async function readRootedFile(rootDir, target, options = {}) {
     }
     if (!st.isFile()) return { ok: false, reason: 'not_file' };
     if (st.size > maxBytes) return { ok: false, reason: 'oversize' };
-    return readHandle(fsp, next, maxBytes, !!options.statOnly);
+    return readHandle(fsp, next, rootReal, maxBytes, !!options.statOnly);
   }
   return { ok: false, reason: 'missing' };
 }
 
-async function readHandle(fsp, file, maxBytes, statOnly) {
+function sameFile(opened, fresh) {
+  if (!opened || !fresh) return false;
+  if (typeof opened.dev !== 'bigint' || typeof fresh.dev !== 'bigint') return false;
+  if (typeof opened.ino !== 'bigint' || typeof fresh.ino !== 'bigint') return false;
+  return opened.dev === fresh.dev && opened.ino === fresh.ino;
+}
+
+async function readHandle(fsp, file, rootReal, maxBytes, statOnly) {
   let fh;
   try {
     fh = await fsp.open(file, openFlags());
@@ -116,11 +123,33 @@ async function readHandle(fsp, file, maxBytes, statOnly) {
     }
   }
   try {
-    const st = await fh.stat();
-    if (!st.isFile()) return { ok: false, reason: 'not_file' };
-    if (st.size > maxBytes) return { ok: false, reason: 'oversize' };
-    if (statOnly) return { ok: true, size: st.size };
-    const want = Math.min(st.size, maxBytes + 1);
+    const opened = await fh.stat({ bigint: true });
+    if (!opened.isFile()) return { ok: false, reason: 'not_file' };
+    if (opened.size > BigInt(maxBytes)) return { ok: false, reason: 'oversize' };
+    // The path can be swapped for a junction between the pre-check and open.
+    // The handle has to still be the file that path names, inside the base.
+    let real;
+    try { real = await fsp.realpath(file); }
+    catch (_) { return { ok: false, reason: 'unreadable' }; }
+    if (!isInside(rootReal, real) || !samePath(real, path.resolve(file))) {
+      return { ok: false, reason: 'symlink' };
+    }
+    let fresh;
+    try { fresh = await fsp.lstat(real, { bigint: true }); }
+    catch (_) { return { ok: false, reason: 'unreadable' }; }
+    if (fresh.isSymbolicLink() || !fresh.isFile() || !sameFile(opened, fresh)) {
+      return { ok: false, reason: 'symlink' };
+    }
+    let again;
+    try { again = await fsp.realpath(file); }
+    catch (_) { return { ok: false, reason: 'unreadable' }; }
+    if (!isInside(rootReal, again) || !samePath(again, real)) {
+      return { ok: false, reason: 'symlink' };
+    }
+    if (statOnly) return { ok: true, size: Number(opened.size) };
+    // Ask for cap+1 bytes even when the first fstat was smaller, so a file
+    // that grows is not accepted as a short prefix of itself.
+    const want = maxBytes + 1;
     const buf = Buffer.alloc(want);
     let off = 0;
     while (off < want) {
@@ -129,6 +158,7 @@ async function readHandle(fsp, file, maxBytes, statOnly) {
       off += bytesRead;
     }
     if (off > maxBytes) return { ok: false, reason: 'oversize' };
+    if (BigInt(off) !== opened.size) return { ok: false, reason: 'unreadable' };
     return { ok: true, data: buf.subarray(0, off), size: off };
   } finally {
     await fh.close();

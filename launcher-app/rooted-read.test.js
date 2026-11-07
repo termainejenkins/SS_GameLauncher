@@ -211,3 +211,54 @@ test('an oversize map json and map png are refused', async () => {
   assert.equal(image.ok, false);
   assert.equal(image.reason, 'oversize');
 });
+
+test('a file that grows past the cap is not returned as a short prefix', async () => {
+  const dir = tmpDir();
+  const file = path.join(dir, 'note.txt');
+  fs.writeFileSync(file, 'abcd');
+  const real = fs.promises;
+  const fsp = {
+    realpath: (p) => real.realpath(p),
+    lstat: (p, opts) => real.lstat(p, opts),
+    open: async (p, flags) => {
+      const fh = await real.open(p, flags);
+      const origStat = fh.stat.bind(fh);
+      fh.stat = async (opts) => {
+        const st = await origStat(opts);
+        fs.appendFileSync(p, '0123456789ABCDEF');
+        return st;
+      };
+      return fh;
+    },
+  };
+  const read = await readRootedFile(dir, file, { maxBytes: 8, fsImpl: { promises: fsp } });
+  assert.equal(read.ok, false);
+  assert.equal(read.reason, 'oversize');
+  assert.equal(read.data, undefined);
+});
+
+test('a handle whose device and inode no longer match the path is rejected', async () => {
+  const dir = tmpDir();
+  const file = path.join(dir, 'note.txt');
+  fs.writeFileSync(file, 'hello');
+  const real = fs.promises;
+  const fsp = {
+    realpath: (p) => real.realpath(p),
+    lstat: async (p, opts) => {
+      const st = await real.lstat(p, opts);
+      if (!(opts && opts.bigint)) return st;
+      return new Proxy(st, {
+        get(target, prop, receiver) {
+          if (prop === 'ino') return target.ino + 1n;
+          const value = Reflect.get(target, prop, receiver);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    },
+    open: (p, flags) => real.open(p, flags),
+  };
+  const read = await readRootedFile(dir, file, { maxBytes: 100, fsImpl: { promises: fsp } });
+  assert.equal(read.ok, false);
+  assert.equal(read.reason, 'symlink');
+  assert.equal(read.data, undefined);
+});
