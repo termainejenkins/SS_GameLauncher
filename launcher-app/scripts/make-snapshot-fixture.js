@@ -149,6 +149,7 @@ function main() {
     saveSlotIndex: 2,
     steamId: '76561198000000000',
     account: {
+      personaName: 'Amani',
       achievements: { Total_Lions_Hunted: 3, First_Drink: 1 },
       loreDiscoveredCount: 12,
       loreTotalCount: 80,
@@ -179,7 +180,7 @@ function main() {
         },
         vitals: { health: 0.82, stamina: 0.6, hunger: 0.3, thirst: 0.4, oxygen: 1, weight: 190, bodyTemp: 38 },
         base: { attack: 40, defense: 22, armor: 5, speed: 600 },
-        statusEffects: ['BoneBreak'],
+        statusEffects: ['buffs:2', 'boneBreak'],
         inventorySummary: { items: 3, maxSlots: 10 },
         history: history([
           [SAVED_AT - 86400 * 3, 'Hunt', 1],
@@ -214,7 +215,7 @@ function main() {
         },
         vitals: { health: 1, stamina: 0.9, hunger: 0.2, thirst: 0.25, oxygen: 1, weight: 320, bodyTemp: 38 },
         base: { attack: 18, defense: 16, armor: 2, speed: 720 },
-        statusEffects: [],
+        statusEffects: ['debuffs:1', 'fertile'],
         inventorySummary: { items: 1, maxSlots: 8 },
         history: [],
         mapDiscovery: [{
@@ -244,7 +245,7 @@ function main() {
         },
         vitals: { health: 0, stamina: 0, hunger: 1, thirst: 1, oxygen: 0, weight: 160, bodyTemp: 30 },
         base: { attack: 28, defense: 14, armor: 3, speed: 640 },
-        statusEffects: [],
+        statusEffects: ['burn:3', 'pregnant'],
         inventorySummary: { items: 0, maxSlots: 10 },
         history: history([
           [SAVED_AT - 8 * 86400, 'Created', 0],

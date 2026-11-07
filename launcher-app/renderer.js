@@ -793,8 +793,8 @@ window.onload = () => {
     if (view.game && view.game.build) bits.push(view.game.build);
     if (view.game && view.game.branch) bits.push(view.game.branch);
     if (view.saveSlotIndex !== null && view.saveSlotIndex !== undefined) bits.push(`slot ${view.saveSlotIndex}`);
-    if (view.steamId && !view.personaName) bits.push(`Steam ${view.steamId}`);
-    if (Number.isFinite(view.savedAtUnix)) bits.push(`saved ${formatUnix(view.savedAtUnix)}`);
+    // savedAtUnix is the writer's clock. The heading is the persona fallback, so the id is not repeated.
+    if (Number.isFinite(view.savedAtUnix)) bits.push(`written ${formatUnix(view.savedAtUnix)}`);
     meta.textContent = bits.join(' · ');
     const account = view.account;
     if (!account) return;
@@ -834,14 +834,16 @@ window.onload = () => {
     name.textContent = card.name;
     const sub = document.createElement('div');
     sub.className = grave ? 'tgc-grave-sub' : 'tgc-card-sub';
+    const fresh = Number.isFinite(card.lastUpdatedUnix) ? `updated ${formatUnix(card.lastUpdatedUnix)}` : '';
     if (grave) {
       const days = card.daysSurvived === null ? 'Dead' : `Died after ${card.daysSurvived} days`;
-      sub.textContent = [card.speciesId || 'Unknown', days].join(' · ');
+      sub.textContent = [card.speciesId || 'Unknown', days, fresh].filter(Boolean).join(' · ');
     } else {
       const parts = [];
       if (card.speciesId) parts.push(card.speciesId);
       if (card.level !== null) parts.push(`level ${card.level}`);
       if (card.daysSurvived !== null) parts.push(`${card.daysSurvived} days`);
+      if (fresh) parts.push(fresh);
       sub.textContent = parts.join(' · ') || 'Alive';
     }
     btn.append(name, sub);
@@ -914,6 +916,7 @@ window.onload = () => {
     if (card.level !== null) subParts.push(`level ${card.level}`);
     if (card.status === 'DEAD') subParts.push(card.daysSurvived === null ? 'Dead' : `died after ${card.daysSurvived} days`);
     else if (card.daysSurvived !== null) subParts.push(`${card.daysSurvived} days survived`);
+    if (Number.isFinite(card.lastUpdatedUnix)) subParts.push(`updated ${formatUnix(card.lastUpdatedUnix)}`);
     const loc = card.location;
     if (loc && loc.region) subParts.push(loc.region);
     document.getElementById('tgc-detail-sub').textContent = subParts.join(' · ');

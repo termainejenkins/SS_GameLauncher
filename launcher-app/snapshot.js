@@ -31,7 +31,7 @@ const MESSAGES = Object.freeze({
   unreadable: 'The profile summary could not be read.',
   unknownSchema: 'This profile was written by a newer game. Update the launcher.',
   oversize: 'The profile summary is too large to show (over 32 KB).',
-  stale: 'This summary is more than 30 days old.',
+  stale: 'This summary was written more than 30 days ago.',
   disabled: 'Profile summary is off in this build.',
   noMap: 'No map data yet.',
   pinOnlyFog: 'No discovered-area fog for this character.',
@@ -195,6 +195,82 @@ function normalizeAchievements(raw) {
   return out;
 }
 
+// Writer emits these strings only. Counts stay in the chip ("buffs:2"); flags have no number.
+const STATUS_EFFECT_FLAGS = Object.freeze(['boneBreak', 'fertile', 'pregnant']);
+const STATUS_EFFECT_COUNT = /^(buffs|debuffs|disease|burn):([1-9][0-9]*)$/;
+
+/** One chip, exactly as written, or null when it is not one of the fixed labels. */
+function statusEffectLabel(value) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (STATUS_EFFECT_FLAGS.includes(text)) return text;
+  if (STATUS_EFFECT_COUNT.test(text)) return text;
+  return null;
+}
+
+/**
+ * Fixed labels from either the writer's string list or the StatusEffects struct.
+ * Counts are emitted only when > 0. Flags only when true. Unknown strings are dropped.
+ * A kept string is not renamed.
+ */
+function normalizeStatusEffects(raw) {
+  if (Array.isArray(raw)) {
+    const out = [];
+    for (const item of raw) {
+      const label = statusEffectLabel(item);
+      if (!label) continue;
+      out.push(label);
+      if (out.length >= 7) break;
+    }
+    return out;
+  }
+  if (!raw || typeof raw !== 'object') return [];
+  const out = [];
+  const counts = [
+    ['buffs', raw.ActiveBuffs],
+    ['debuffs', raw.ActiveDeffs],
+    ['disease', raw.Diseases],
+    ['burn', raw.Burn],
+  ];
+  for (const [name, value] of counts) {
+    const n = intOrNull(value);
+    if (n !== null && n > 0) out.push(`${name}:${n}`);
+  }
+  if (raw.BoneBreak === true) out.push('boneBreak');
+  if (raw.Fertility === true) out.push('fertile');
+  if (raw.Pregnant === true) out.push('pregnant');
+  return out;
+}
+
+/**
+ * Name shown on the Account section.
+ * Snapshot account.personaName, then a steamworks.js persona if one was passed, then the Steam ID.
+ * An empty personaName does not count.
+ */
+function displayPersona({ personaName, steamPersona, steamId } = {}) {
+  const fromSave = shortString(personaName);
+  if (fromSave) return { name: fromSave, source: 'snapshot' };
+  const fromSteam = shortString(steamPersona);
+  if (fromSteam) return { name: fromSteam, source: 'steamworks' };
+  const id = shortString(steamId, 32);
+  if (id) return { name: id, source: 'steamid' };
+  return { name: null, source: null };
+}
+
+/**
+ * steamworks.js localplayer.getName(), if that call already works.
+ * Does not call init(). A throw (Steam not up in this process) returns null.
+ */
+function readSteamPersonaName(steamworks) {
+  try {
+    const getName = steamworks && steamworks.localplayer && steamworks.localplayer.getName;
+    if (typeof getName !== 'function') return null;
+    return shortString(getName());
+  } catch (_) {
+    return null;
+  }
+}
+
 function normalizeAccount(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const account = {
@@ -207,6 +283,8 @@ function normalizeAccount(raw) {
     lifetimeXP: nonNegInt(raw.lifetimeXP),
     longestSurvivalTimeDays: nonNegInt(raw.longestSurvivalTimeDays),
     mostPlayedSpecies: mostPlayed(raw.mostPlayedSpecies),
+    // Empty string means Steam was down at write time. Display falls through.
+    personaName: shortString(raw.personaName) || null,
   };
   return account;
 }
@@ -298,15 +376,7 @@ function normalizeCharacter(raw) {
   if (raw.status !== 'ALIVE' && raw.status !== 'DEAD') return null;
   const progression = raw.progression && typeof raw.progression === 'object' ? raw.progression : {};
   const name = shortString(progression.characterName) || 'Unnamed';
-  const effects = [];
-  if (Array.isArray(raw.statusEffects)) {
-    for (const label of raw.statusEffects) {
-      const text = shortString(label);
-      if (!text) continue;
-      effects.push(text);
-      if (effects.length >= 12) break;
-    }
-  }
+  // Status on the snapshot is the writer's ALIVE/DEAD string (from the Status byte). Not the raw byte.
   let inventory = null;
   if (raw.inventorySummary && typeof raw.inventorySummary === 'object') {
     const items = nonNegInt(raw.inventorySummary.items);
@@ -327,7 +397,7 @@ function normalizeCharacter(raw) {
     location: normalizeLocation(raw.location),
     vitals: normalizeVitals(raw.vitals),
     base: normalizeBase(raw.base),
-    statusEffects: effects,
+    statusEffects: normalizeStatusEffects(raw.statusEffects),
     inventory,
     history: normalizeHistory(raw.history),
     // Dead characters never carry fog into the view. Alive-only keeps the 32 KB cap meaningful.
@@ -380,6 +450,7 @@ function parseSnapshot(buffer, nowSec) {
     account: normalizeAccount(data.account),
     characters: sortCharacters(characters),
   };
+  // File staleness is the writer's clock (savedAtUnix), not a character's lastUpdatedUnix.
   const age = now - data.savedAtUnix;
   if (age > STALE_AFTER_SEC) {
     return { ok: true, state: 'stale', message: MESSAGES.stale, summary };
@@ -594,6 +665,7 @@ function disabledView() {
     steamId: null,
     game: null,
     personaName: null,
+    personaSource: null,
     account: null,
     alive: [],
     graveyard: [],
@@ -649,6 +721,11 @@ function loadLauncherSnapshot(opts = {}) {
     if (character.status === 'ALIVE') alive.push(card);
     else graveyard.push(card);
   }
+  const shown = displayPersona({
+    personaName: parsed.summary.account && parsed.summary.account.personaName,
+    steamPersona: opts.steamPersona != null ? opts.steamPersona : opts.personaName,
+    steamId: parsed.summary.steamId,
+  });
   return {
     enabled: true,
     state: parsed.state,
@@ -657,7 +734,8 @@ function loadLauncherSnapshot(opts = {}) {
     saveSlotIndex: parsed.summary.saveSlotIndex,
     steamId: parsed.summary.steamId,
     game: parsed.summary.game,
-    personaName: shortString(opts.personaName) || null,
+    personaName: shown.name,
+    personaSource: shown.source,
     account: parsed.summary.account,
     alive,
     graveyard,
@@ -684,4 +762,7 @@ module.exports = {
   readSnapshotFile,
   loadMapPackage,
   loadLauncherSnapshot,
+  normalizeStatusEffects,
+  displayPersona,
+  readSteamPersonaName,
 };

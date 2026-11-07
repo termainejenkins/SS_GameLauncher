@@ -408,6 +408,12 @@ test('fixture: two alive, one graveyard, pin and fog from the fake map', () => {
   assert.equal(view.graveyard[0].map.fog, null);
   assert.equal(view.graveyard[0].history.some((h) => h.type === 'Died'), true);
   assert.equal(view.account.lifetimeCharactersCreated, 3);
+  assert.equal(view.account.personaName, 'Amani');
+  assert.equal(view.personaName, 'Amani');
+  assert.equal(view.personaSource, 'snapshot');
+  assert.deepEqual(jasiri.statusEffects, ['buffs:2', 'boneBreak']);
+  assert.equal(view.savedAtUnix !== jasiri.lastUpdatedUnix, true);
+  assert.equal(Number.isFinite(jasiri.lastUpdatedUnix), true);
   const png = fs.readFileSync(path.join(FIXTURE, 'tgc_worldmap_TGC_World.png'));
   assert.equal(png[0], 0x89);
   assert.equal(png.toString('ascii', 1, 4), 'PNG');
@@ -430,6 +436,91 @@ test('main process reads on demand and refreshes when the window focuses or the 
   assert.match(renderer, /getElementById\('tgc-history'\)/);
   assert.match(renderer, /function drawMap/);
   assert.equal(html.includes('unlockedCosmetics'), false);
+});
+
+test('statusEffects keep the fixed labels as written and drop zeros', () => {
+  assert.deepEqual(snap.normalizeStatusEffects([
+    'buffs:2', 'debuffs:0', 'disease:1', 'burn:0', 'boneBreak', 'BoneBreak', 'fertile', 'pregnant', 'social',
+  ]), ['buffs:2', 'disease:1', 'boneBreak', 'fertile', 'pregnant']);
+  assert.deepEqual(snap.normalizeStatusEffects({
+    ActiveBuffs: 2,
+    ActiveDeffs: 0,
+    Diseases: 0,
+    Burn: 3,
+    BoneBreak: false,
+    Fertility: true,
+    Pregnant: false,
+  }), ['buffs:2', 'burn:3', 'fertile']);
+  assert.deepEqual(snap.normalizeStatusEffects(null), []);
+  const parsed = snap.parseSnapshot(Buffer.from(JSON.stringify(minimal({
+    characters: [
+      alive('Jasiri', { status: 'ALIVE', statusEffects: ['buffs:2', 'boneBreak'] }),
+      alive('Byte', { status: 0, statusEffects: ['buffs:1'] }),
+      alive('Lower', { status: 'alive' }),
+      alive('Lyanne', { status: 'DEAD', statusEffects: ['burn:3'] }),
+    ],
+  }))), NOW);
+  assert.equal(parsed.summary.characters.length, 2);
+  assert.deepEqual(parsed.summary.characters.find((c) => c.name === 'Jasiri').statusEffects, ['buffs:2', 'boneBreak']);
+  assert.equal(parsed.summary.characters.find((c) => c.name === 'Lyanne').status, 'DEAD');
+});
+
+test('personaName falls back to steamworks, then the Steam ID', () => {
+  assert.deepEqual(snap.displayPersona({
+    personaName: 'Amani', steamPersona: 'FromSteam', steamId: '76561198000000000',
+  }), { name: 'Amani', source: 'snapshot' });
+  assert.deepEqual(snap.displayPersona({
+    personaName: '', steamPersona: 'FromSteam', steamId: '76561198000000000',
+  }), { name: 'FromSteam', source: 'steamworks' });
+  assert.deepEqual(snap.displayPersona({
+    personaName: '   ', steamPersona: '', steamId: '76561198000000000',
+  }), { name: '76561198000000000', source: 'steamid' });
+  assert.deepEqual(snap.displayPersona({}), { name: null, source: null });
+  assert.equal(snap.readSteamPersonaName(null), null);
+  assert.equal(snap.readSteamPersonaName({ localplayer: { getName() { throw new Error('not init'); } } }), null);
+  assert.equal(snap.readSteamPersonaName({ localplayer: { getName: () => 'FromSteam' } }), 'FromSteam');
+
+  const dir = tmpDir();
+  writeJson(dir, 'launcher_snapshot.json', minimal({
+    steamId: '76561198000000000',
+    account: { personaName: '' },
+    characters: [],
+  }));
+  const fromSteam = snap.loadLauncherSnapshot({
+    isPackaged: false,
+    env: { SS_TGC_SNAPSHOT_DIR: dir },
+    now: NOW,
+    steamPersona: 'FromSteam',
+  });
+  assert.equal(fromSteam.account.personaName, null);
+  assert.equal(fromSteam.personaName, 'FromSteam');
+  assert.equal(fromSteam.personaSource, 'steamworks');
+  const fromId = snap.loadLauncherSnapshot({
+    isPackaged: false,
+    env: { SS_TGC_SNAPSHOT_DIR: dir },
+    now: NOW,
+  });
+  assert.equal(fromId.personaName, '76561198000000000');
+  assert.equal(fromId.personaSource, 'steamid');
+});
+
+test('staleness uses the writer clock, character freshness stays lastUpdatedUnix', () => {
+  const oldChar = NOW - snap.STALE_AFTER_SEC - 86400;
+  const freshFile = snap.parseSnapshot(Buffer.from(JSON.stringify(minimal({
+    savedAtUnix: NOW - 60,
+    characters: [alive('Jasiri', { lastUpdatedUnix: oldChar })],
+  }))), NOW);
+  assert.equal(freshFile.state, 'ok');
+  assert.equal(freshFile.summary.savedAtUnix, NOW - 60);
+  assert.equal(freshFile.summary.characters[0].lastUpdatedUnix, oldChar);
+
+  const staleFile = snap.parseSnapshot(Buffer.from(JSON.stringify(minimal({
+    savedAtUnix: NOW - snap.STALE_AFTER_SEC - 5,
+    characters: [alive('Jasiri', { lastUpdatedUnix: NOW - 10 })],
+  }))), NOW);
+  assert.equal(staleFile.state, 'stale');
+  assert.match(staleFile.message, /written more than 30 days ago/);
+  assert.equal(staleFile.summary.characters[0].lastUpdatedUnix, NOW - 10);
 });
 
 test('unnamed character, bad status, and a non-object file do not throw', () => {

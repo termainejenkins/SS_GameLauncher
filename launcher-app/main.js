@@ -248,13 +248,38 @@ function pushSnapshot() {
   try { mainWindow.webContents.send('snapshot:updated'); } catch (_) { /* closing */ }
 }
 
+// Persona from steamworks.js only when this process can already read it.
+// init() is not called here: it would take the Steam session the game needs.
+function steamPersonaIfReady() {
+  try {
+    const steamworks = require('steamworks.js');
+    return snapshot.readSteamPersonaName(steamworks);
+  } catch (_) {
+    return null;
+  }
+}
+
 function readSnapshot() {
   try {
-    return snapshot.loadLauncherSnapshot({
+    const view = snapshot.loadLauncherSnapshot({
       isPackaged: app.isPackaged,
       env: process.env,
       now: Math.floor(Date.now() / 1000),
     });
+    // Only ask steamworks.js when the file has no personaName. Skip init().
+    if (view && view.personaSource === 'steamid') {
+      const steamPersona = steamPersonaIfReady();
+      if (steamPersona) {
+        const shown = snapshot.displayPersona({
+          personaName: view.account && view.account.personaName,
+          steamPersona,
+          steamId: view.steamId,
+        });
+        view.personaName = shown.name;
+        view.personaSource = shown.source;
+      }
+    }
+    return view;
   } catch (_) {
     return {
       enabled: snapshot.snapshotReadAllowed({ isPackaged: app.isPackaged, env: process.env }),
@@ -265,6 +290,7 @@ function readSnapshot() {
       steamId: null,
       game: null,
       personaName: null,
+      personaSource: null,
       account: null,
       alive: [],
       graveyard: [],

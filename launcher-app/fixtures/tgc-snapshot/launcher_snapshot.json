@@ -9,6 +9,7 @@
   "saveSlotIndex": 2,
   "steamId": "76561198000000000",
   "account": {
+    "personaName": "Amani",
     "achievements": {
       "Total_Lions_Hunted": 3,
       "First_Drink": 1
@@ -60,7 +61,8 @@
         "speed": 600
       },
       "statusEffects": [
-        "BoneBreak"
+        "buffs:2",
+        "boneBreak"
       ],
       "inventorySummary": {
         "items": 3,
@@ -134,7 +136,10 @@
         "armor": 2,
         "speed": 720
       },
-      "statusEffects": [],
+      "statusEffects": [
+        "debuffs:1",
+        "fertile"
+      ],
       "inventorySummary": {
         "items": 1,
         "maxSlots": 8
@@ -186,7 +191,10 @@
         "armor": 3,
         "speed": 640
       },
-      "statusEffects": [],
+      "statusEffects": [
+        "burn:3",
+        "pregnant"
+      ],
       "inventorySummary": {
         "items": 0,
         "maxSlots": 10
