@@ -44,31 +44,11 @@ async function waitFor(wc, expr) {
   throw new Error(`timed out: ${expr}`);
 }
 
-async function fitAndCapture(win, wc, name) {
-  await wc.executeJavaScript(`(() => {
-    const hero = document.querySelector('.hero');
-    const columns = document.querySelector('.columns');
-    const toast = document.getElementById('toast');
-    if (hero) hero.style.display = 'none';
-    if (columns) columns.style.display = 'none';
-    if (toast) toast.style.display = 'none';
-    document.getElementById('characters').scrollIntoView({ block: 'start' });
-  })()`);
-  const box = await wc.executeJavaScript(`(() => {
-    const el = document.getElementById('characters');
-    const r = el.getBoundingClientRect();
-    return { x: r.x, y: r.y, w: r.width, h: r.height, iw: innerWidth, ih: innerHeight };
-  })()`);
-  const targetH = Math.min(1700, Math.max(720, Math.ceil(box.y + box.h + 28)));
-  win.setContentSize(1280, targetH);
+async function captureWindow(win, wc, name) {
+  win.setContentSize(1280, 800);
   await sleep(250);
-  await wc.executeJavaScript(`document.getElementById('characters').scrollIntoView({ block: 'start' })`);
-  await sleep(200);
-  const box2 = await wc.executeJavaScript(`(() => {
-    const el = document.getElementById('characters');
-    const r = el.getBoundingClientRect();
-    return { x: r.x, y: r.y, w: r.width, h: r.height, iw: innerWidth, ih: innerHeight, state: el.dataset.state };
-  })()`);
+  await wc.executeJavaScript(`document.getElementById('main').scrollTop = 0`);
+  await sleep(150);
   let img = await wc.capturePage();
   for (let i = 0; i < 5 && img.isEmpty(); i++) {
     win.show();
@@ -77,19 +57,15 @@ async function fitAndCapture(win, wc, name) {
     img = await wc.capturePage();
   }
   const native = img.getSize();
-  const scaleX = native.width / box2.iw;
-  const scaleY = native.height / box2.ih;
-  let crop = {
-    x: Math.max(0, Math.floor(box2.x * scaleX)),
-    y: Math.max(0, Math.floor(box2.y * scaleY)),
-    width: Math.max(1, Math.floor(box2.w * scaleX)),
-    height: Math.max(1, Math.floor(box2.h * scaleY)),
-  };
-  if (crop.x + crop.width > native.width) crop.width = native.width - crop.x;
-  if (crop.y + crop.height > native.height) crop.height = native.height - crop.y;
-  const shot = crop.width > 0 && crop.height > 0 ? img.crop(crop) : img;
-  writePng(name, shot.toPNG());
-  console.log('  ', name, shot.getSize(), 'state', box2.state, 'crop', crop);
+  if (native.width !== 1280) img = img.resize({ width: 1280, height: 800, quality: 'best' });
+  writePng(name, img.toPNG());
+  const info = await wc.executeJavaScript(`JSON.stringify({
+    home: document.getElementById('home').hidden,
+    game: document.getElementById('game-view').hidden,
+    tab: document.getElementById('game-view').dataset.game || '',
+    state: document.getElementById('game-view').dataset.state
+  })`);
+  console.log('  ', name, img.getSize(), info);
 }
 
 function writeSnapshot(value) {
@@ -110,42 +86,35 @@ app.whenReady().then(async () => {
     const msg = typeof args[0] === 'object' && args[0] && 'message' in args[0] ? args[0].message : args[2];
     if (msg) console.log('[renderer]', msg);
   });
-  win.setContentSize(1280, 1100);
+  win.setContentSize(1280, 800);
   if (wc.isLoading()) await loaded(wc);
   await wc.executeJavaScript("localStorage.setItem('analyticsConsentAsked','true'); localStorage.setItem('theme','dark');");
   const again = loaded(wc);
   wc.reload();
   await again;
-  await waitFor(wc, `document.getElementById('characters').dataset.state === 'ok'`);
-  await wc.executeJavaScript(`document.getElementById('tgc-tab-detail').click()`);
-  await sleep(200);
-  await fitAndCapture(win, wc, 'characters-roster-stats-history.png');
+  await waitFor(wc, `document.getElementById('game-view').dataset.state === 'ok' && document.getElementById('game-view').hidden`);
+  await captureWindow(win, wc, 'home.png');
 
-  await wc.executeJavaScript(`document.getElementById('tgc-tab-map').click()`);
-  await waitFor(wc, `document.getElementById('characters').dataset.mapready === '1' && !document.getElementById('tgc-map-pin').hidden`);
+  await wc.executeJavaScript(`document.querySelector('[data-open-game="tgc"]').click()`);
+  await waitFor(wc, `document.getElementById('game-view').hidden === false && document.getElementById('tgc-last-name').textContent === 'Jasiri'`);
   await sleep(200);
-  await fitAndCapture(win, wc, 'map-pin-and-fog.png');
+  await captureWindow(win, wc, 'tgc-overview.png');
 
-  await wc.executeJavaScript(`document.querySelector('#tgc-graveyard button').click(); document.getElementById('tgc-tab-map').click();`);
-  await waitFor(wc, `document.getElementById('characters').dataset.mapready === '1' && document.getElementById('tgc-map-caption').textContent.includes('pin only')`);
+  await wc.executeJavaScript(`document.querySelector('#game-tablist [data-tab="characters"]').click()`);
+  await waitFor(wc, `document.getElementById('game-panel-tgc-characters').hidden === false && document.getElementById('tgc-history').children.length > 0`);
   await sleep(200);
-  await fitAndCapture(win, wc, 'map-graveyard-pin-only.png');
+  await captureWindow(win, wc, 'tgc-characters.png');
 
-  const good = JSON.parse(fs.readFileSync(path.join(fixtureSrc, 'launcher_snapshot.json'), 'utf8'));
-  const cases = [
-    ['error-missing.png', null, 'missing'],
-    ['error-corrupt.png', '{"schemaVersion":1,"characters":[', 'corrupt'],
-    ['error-unknown-schema.png', { schemaVersion: 9, savedAtUnix: 1, characters: [] }, 'unknown_schema'],
-    ['error-oversize.png', Buffer.alloc(33 * 1024, 0x20), 'oversize'],
-    ['error-stale.png', { ...good, savedAtUnix: Math.floor(Date.now() / 1000) - 40 * 86400 }, 'stale'],
-  ];
-  for (const [name, body, state] of cases) {
-    writeSnapshot(body);
-    wc.send('snapshot:updated');
-    await waitFor(wc, `document.getElementById('characters').dataset.state === ${JSON.stringify(state)}`);
-    await sleep(150);
-    await fitAndCapture(win, wc, name);
-  }
+  await wc.executeJavaScript(`document.querySelector('#game-tablist [data-tab="map"]').click()`);
+  await waitFor(wc, `document.getElementById('game-view').dataset.mapready === '1' && document.getElementById('tgc-map-pin').hidden === false`);
+  await sleep(250);
+  await captureWindow(win, wc, 'tgc-map.png');
+
+  writeSnapshot(null);
+  wc.send('snapshot:updated');
+  await waitFor(wc, `document.getElementById('game-view').dataset.state === 'missing' && document.getElementById('game-status').textContent.includes('Play once')`);
+  await sleep(150);
+  await captureWindow(win, wc, 'tgc-empty.png');
   app.quit();
 }).catch((err) => {
   console.error(err);

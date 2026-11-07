@@ -25,10 +25,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
         Library
       </button>
-      <button data-scroll="characters" id="nav-characters" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3.5 19c.8-2.6 2.8-4 5.5-4s4.7 1.4 5.5 4"/><path d="M15 19.2c.4-1.5 1.4-2.6 3-3.2"/></svg>
-        Characters
-      </button>
       <button data-scroll="downloads">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16"/></svg>
         Downloads
@@ -66,6 +62,7 @@
   <!-- ================= MAIN ================= -->
   <main class="main" id="main">
     <span id="top"></span>
+    <div id="home">
 
     <!-- Hero: Juma + Kivuli key art v9 (assets/art/tgc-hero-v9.png, 2x: tgc-hero-v9_2x.png) -->
     <section class="hero">
@@ -94,76 +91,13 @@
       </div>
     </section>
 
-    <!-- Profile summary. Hidden until the main process says reading is allowed (off in a release build). -->
-    <div id="characters" class="tgc-sync" hidden data-state="disabled">
-      <p id="tgc-banner" class="tgc-banner" hidden></p>
-
-      <section id="tgc-account" class="card tgc-account" aria-labelledby="tgc-account-title">
-        <div class="section-title">
-          <h2 id="tgc-account-title">Account</h2>
-          <span id="tgc-account-meta" class="muted"></span>
-        </div>
-        <p id="tgc-persona" class="tgc-persona" hidden></p>
-        <div id="tgc-account-stats" class="tgc-stats"></div>
-        <div id="tgc-achievements" class="tgc-chips"></div>
-        <p class="tgc-local-note muted">This summary stays on this PC. Nothing is sent.</p>
-      </section>
-
-      <section class="card tgc-characters" aria-labelledby="tgc-characters-title">
-        <div class="section-title">
-          <h2 id="tgc-characters-title">Characters</h2>
-          <span id="tgc-characters-meta" class="muted"></span>
-        </div>
-        <div id="tgc-roster-wrap" class="tgc-roster-wrap">
-          <div>
-            <h3 class="tgc-sub">Roster</h3>
-            <div id="tgc-roster" class="tgc-roster"></div>
-            <p id="tgc-roster-empty" class="muted" hidden>No characters in this summary yet.</p>
-          </div>
-          <div>
-            <h3 class="tgc-sub">Graveyard</h3>
-            <div id="tgc-graveyard" class="tgc-graveyard"></div>
-            <p id="tgc-grave-empty" class="muted" hidden>No fallen characters.</p>
-          </div>
-        </div>
-        <div id="tgc-detail" class="tgc-detail" hidden>
-          <div class="tgc-detail-head">
-            <div>
-              <h3 id="tgc-detail-name"></h3>
-              <p id="tgc-detail-sub" class="muted"></p>
-            </div>
-            <div class="tgc-tabs" role="tablist">
-              <button type="button" class="btn btn-sm is-on" id="tgc-tab-detail" role="tab" aria-selected="true">Stats &amp; history</button>
-              <button type="button" class="btn btn-sm" id="tgc-tab-map" role="tab" aria-selected="false">Map</button>
-            </div>
-          </div>
-          <div id="tgc-panel-detail">
-            <div id="tgc-vitals" class="tgc-vitals"></div>
-            <div id="tgc-base" class="tgc-base"></div>
-            <div id="tgc-effects" class="tgc-chips"></div>
-            <p id="tgc-inventory" class="muted"></p>
-            <h3 class="tgc-sub">History</h3>
-            <ul id="tgc-history" class="tgc-history"></ul>
-            <p id="tgc-history-empty" class="muted" hidden>No history yet.</p>
-          </div>
-          <div id="tgc-panel-map" hidden>
-            <div class="map-stage" id="tgc-map-stage">
-              <canvas id="tgc-map" width="1024" height="1024" aria-label="Character location on the world map"></canvas>
-              <div id="tgc-map-pin" class="map-pin" hidden></div>
-            </div>
-            <p id="tgc-map-caption" class="map-caption"></p>
-          </div>
-        </div>
-      </section>
-    </div>
-
     <div class="columns">
       <!-- ---------- left column ---------- -->
       <div class="col">
         <section>
           <div class="section-title"><h2>Library</h2><span class="muted">4 titles</span></div>
           <div id="game-buttons" class="games">
-            <article class="game">
+            <article class="game" data-game-card="tgc">
               <div class="game-art game-art-cover">
                 <img src="assets/art/tgc-cover-card.png" alt="The Great Circle cover art" draggable="false">
                 <span class="badge badge-live">Early Access</span>
@@ -171,7 +105,10 @@
               <div class="game-body">
                 <div class="game-title">The Great Circle</div>
                 <div class="game-sub">African wilderness</div>
-                <button class="btn btn-primary btn-sm" data-action="play-tgc">Play</button>
+                <div class="game-actions">
+                  <button class="btn btn-primary btn-sm" data-action="play-tgc">Play</button>
+                  <button type="button" class="btn btn-sm" data-open-game="tgc">Open</button>
+                </div>
               </div>
             </article>
 
@@ -308,6 +245,86 @@
             <li>Under <strong>Private Betas</strong>, enter the code and press <strong>Check Code</strong>.</li>
             <li>Pick the branch from the dropdown. Steam downloads that build.</li>
           </ol>
+        </section>
+      </div>
+    </div>
+    </div>
+
+    <!-- Per-game page. The shell fills the tab list from the game's own tabs. Home stays Library + News. -->
+    <div id="game-view" hidden data-state="disabled" data-mapready="1">
+      <div class="game-view-bar">
+        <button type="button" id="game-back" class="btn btn-sm btn-ghost">Library</button>
+        <h1 id="game-view-title"></h1>
+        <button type="button" id="game-play" class="btn btn-primary btn-sm" hidden>Play</button>
+      </div>
+      <div id="game-tablist" class="game-tabs" role="tablist" aria-label="Game sections"></div>
+      <p id="game-status" class="tgc-banner" hidden></p>
+      <div id="game-panels">
+        <section id="game-panel-tgc-overview" data-game-panel="tgc" data-tab="overview" hidden>
+          <div id="tgc-overview-body">
+            <section id="tgc-account" class="card tgc-account" aria-labelledby="tgc-account-title">
+              <div class="section-title">
+                <h2 id="tgc-account-title">Account</h2>
+                <span id="tgc-account-meta" class="muted"></span>
+              </div>
+              <p id="tgc-persona" class="tgc-persona" hidden></p>
+              <div id="tgc-account-stats" class="tgc-stats"></div>
+              <div id="tgc-achievements" class="tgc-chips"></div>
+              <p class="tgc-local-note muted">This summary stays on this PC. Nothing is sent.</p>
+            </section>
+            <button type="button" id="tgc-last" class="tgc-card tgc-last">
+              <span class="tgc-last-k">Your last character</span>
+              <span id="tgc-last-name" class="tgc-card-name"></span>
+              <span id="tgc-last-sub" class="tgc-card-sub"></span>
+            </button>
+            <p id="tgc-last-empty" class="muted" hidden>No characters in this summary yet.</p>
+          </div>
+        </section>
+        <section id="game-panel-tgc-characters" data-game-panel="tgc" data-tab="characters" hidden>
+          <div id="tgc-characters-body" class="card tgc-characters">
+            <div class="section-title">
+              <h2 id="tgc-characters-title">Characters</h2>
+              <span id="tgc-characters-meta" class="muted"></span>
+            </div>
+            <div id="tgc-roster-wrap" class="tgc-roster-wrap">
+              <div>
+                <h3 class="tgc-sub">Roster</h3>
+                <div id="tgc-roster" class="tgc-roster"></div>
+                <p id="tgc-roster-empty" class="muted" hidden>No characters in this summary yet.</p>
+              </div>
+              <div>
+                <h3 class="tgc-sub">Graveyard</h3>
+                <div id="tgc-graveyard" class="tgc-graveyard"></div>
+                <p id="tgc-grave-empty" class="muted" hidden>No fallen characters.</p>
+              </div>
+            </div>
+            <div id="tgc-detail" class="tgc-detail" hidden>
+              <div class="tgc-detail-head">
+                <div>
+                  <h3 id="tgc-detail-name"></h3>
+                  <p id="tgc-detail-sub" class="muted"></p>
+                </div>
+              </div>
+              <div id="tgc-vitals" class="tgc-vitals"></div>
+              <div id="tgc-base" class="tgc-base"></div>
+              <div id="tgc-effects" class="tgc-chips"></div>
+              <p id="tgc-inventory" class="muted"></p>
+              <h3 class="tgc-sub">History</h3>
+              <ul id="tgc-history" class="tgc-history"></ul>
+              <p id="tgc-history-empty" class="muted" hidden>No history yet.</p>
+            </div>
+          </div>
+        </section>
+        <section id="game-panel-tgc-map" data-game-panel="tgc" data-tab="map" hidden>
+          <div id="tgc-map-body" class="card">
+            <div class="section-title"><h2>Map</h2></div>
+            <div id="tgc-map-picker" class="tgc-map-picker"></div>
+            <div class="map-stage" id="tgc-map-stage">
+              <canvas id="tgc-map" width="1024" height="1024" aria-label="Character location on the world map"></canvas>
+              <div id="tgc-map-pin" class="map-pin" hidden></div>
+            </div>
+            <p id="tgc-map-caption" class="map-caption"></p>
+          </div>
         </section>
       </div>
     </div>

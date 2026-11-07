@@ -414,6 +414,7 @@ test('fixture: two alive, one graveyard, pin and fog from the fake map', () => {
   assert.deepEqual(jasiri.statusEffects, ['buffs:2', 'boneBreak']);
   assert.equal(view.savedAtUnix !== jasiri.lastUpdatedUnix, true);
   assert.equal(Number.isFinite(jasiri.lastUpdatedUnix), true);
+  assert.equal(view.lastCharacterId, jasiri.characterId);
   const png = fs.readFileSync(path.join(FIXTURE, 'tgc_worldmap_TGC_World.png'));
   assert.equal(png[0], 0x89);
   assert.equal(png.toString('ascii', 1, 4), 'PNG');
@@ -429,10 +430,22 @@ test('main process reads on demand and refreshes when the window focuses or the 
   assert.match(main, /mainWindow\.on\('focus', \(\) => pushSnapshot\(\)\)/);
   assert.match(main, /gameChild = null;\s*pushSnapshot\(\)/);
   assert.match(preload, /getSnapshot: \(\) => ipcRenderer\.invoke\('snapshot:read'\)/);
+  const home = html.slice(html.indexOf('id="home"'), html.indexOf('id="game-view"'));
+  assert.equal(home.includes('id="tgc-account"'), false);
+  assert.equal(home.includes('Your last character'), false);
+  assert.equal(home.includes('id="tgc-map"'), false);
+  assert.match(html, /id="game-view" hidden/);
+  assert.match(html, /data-open-game="tgc"/);
+  assert.match(html, /data-game-panel="tgc" data-tab="overview"/);
+  assert.match(html, /data-game-panel="tgc" data-tab="characters"/);
+  assert.match(html, /data-game-panel="tgc" data-tab="map"/);
+  assert.equal(html.includes('id="nav-characters"'), false);
   assert.match(html, /id="tgc-account"/);
   assert.match(html, /id="tgc-map"/);
-  assert.match(html, /id="nav-characters"/);
   assert.match(html, />Graveyard</);
+  assert.match(renderer, /GAME_VIEWS/);
+  assert.match(renderer, /ArrowRight/);
+  assert.match(renderer, /data-open-game/);
   assert.match(renderer, /getElementById\('tgc-history'\)/);
   assert.match(renderer, /function drawMap/);
   assert.equal(html.includes('unlockedCosmetics'), false);
@@ -502,6 +515,18 @@ test('personaName falls back to steamworks, then the Steam ID', () => {
   });
   assert.equal(fromId.personaName, '76561198000000000');
   assert.equal(fromId.personaSource, 'steamid');
+});
+
+test('last character prefers an alive character over a newer graveyard entry', () => {
+  const alive = [{ characterId: 'a', status: 'ALIVE', lastUpdatedUnix: 10 }];
+  const dead = [{ characterId: 'd', status: 'DEAD', lastUpdatedUnix: 99 }];
+  assert.equal(snap.pickLastCharacter(alive, dead).characterId, 'a');
+  assert.equal(snap.pickLastCharacter([], dead).characterId, 'd');
+  assert.equal(snap.pickLastCharacter([], [
+    { characterId: 'old', lastUpdatedUnix: 1 },
+    { characterId: 'new', lastUpdatedUnix: 5 },
+  ]).characterId, 'new');
+  assert.equal(snap.pickLastCharacter([], []), null);
 });
 
 test('staleness uses the writer clock, character freshness stays lastUpdatedUnix', () => {

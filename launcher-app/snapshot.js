@@ -405,6 +405,16 @@ function normalizeCharacter(raw) {
   };
 }
 
+/** Newest lastUpdatedUnix, alive characters ahead of the graveyard. */
+function pickLastCharacter(alive, graveyard) {
+  const pool = alive && alive.length ? alive : (graveyard || []);
+  let best = null;
+  for (const card of pool) {
+    if (!best || (card.lastUpdatedUnix || 0) > (best.lastUpdatedUnix || 0)) best = card;
+  }
+  return best;
+}
+
 function sortCharacters(list) {
   return list.slice().sort((a, b) => {
     if (a.status !== b.status) return a.status === 'ALIVE' ? -1 : 1;
@@ -721,6 +731,7 @@ function loadLauncherSnapshot(opts = {}) {
     if (character.status === 'ALIVE') alive.push(card);
     else graveyard.push(card);
   }
+  const last = pickLastCharacter(alive, graveyard);
   const shown = displayPersona({
     personaName: parsed.summary.account && parsed.summary.account.personaName,
     steamPersona: opts.steamPersona != null ? opts.steamPersona : opts.personaName,
@@ -736,6 +747,7 @@ function loadLauncherSnapshot(opts = {}) {
     game: parsed.summary.game,
     personaName: shown.name,
     personaSource: shown.source,
+    lastCharacterId: last ? last.characterId : null,
     account: parsed.summary.account,
     alive,
     graveyard,
@@ -765,4 +777,5 @@ module.exports = {
   normalizeStatusEffects,
   displayPersona,
   readSteamPersonaName,
+  pickLastCharacter,
 };

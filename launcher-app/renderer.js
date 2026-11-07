@@ -726,12 +726,124 @@ window.onload = () => {
     });
   }
 
-  // Local profile summary. The main process refuses the read in a packaged build.
-  const tgcRoot = document.getElementById('characters');
-  const tgcNav = document.getElementById('nav-characters');
+  // Per-game pages. Tabs come from GAME_VIEWS, not from the sidebar.
+  // TGC is the only entry for now; another game adds its own tabs and panels later.
+  const GAME_VIEWS = {
+    tgc: {
+      title: 'The Great Circle',
+      playSelector: '#play-ue4',
+      tabs: [
+        { id: 'overview', label: 'Overview' },
+        { id: 'characters', label: 'Characters' },
+        { id: 'map', label: 'Map' },
+      ],
+    },
+  };
+  const gameView = document.getElementById('game-view');
+  let openGameId = null;
+  let gameTab = null;
   let snapshotView = null;
   let selectedId = null;
-  let mapTab = false;
+
+  function openGame(id) {
+    const game = GAME_VIEWS[id];
+    if (!game || !gameView) return;
+    openGameId = id;
+    document.getElementById('home').hidden = true;
+    gameView.hidden = false;
+    gameView.dataset.game = id;
+    document.getElementById('game-view-title').textContent = game.title;
+    const play = document.getElementById('game-play');
+    if (game.playSelector) {
+      play.hidden = false;
+      play.onclick = () => {
+        const target = document.querySelector(game.playSelector);
+        if (target) target.click();
+      };
+    } else {
+      play.hidden = true;
+      play.onclick = null;
+    }
+    const list = document.getElementById('game-tablist');
+    list.textContent = '';
+    game.tabs.forEach((tab) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'game-tab';
+      btn.id = `game-tab-${id}-${tab.id}`;
+      btn.setAttribute('role', 'tab');
+      btn.dataset.tab = tab.id;
+      btn.textContent = tab.label;
+      btn.setAttribute('aria-controls', `game-panel-${id}-${tab.id}`);
+      btn.onclick = () => showGameTab(tab.id);
+      list.appendChild(btn);
+    });
+    showGameTab(game.tabs[0] ? game.tabs[0].id : null);
+    document.getElementById('main').scrollTop = 0;
+  }
+
+  function closeGame() {
+    openGameId = null;
+    gameTab = null;
+    if (gameView) {
+      gameView.hidden = true;
+      gameView.dataset.game = '';
+    }
+    const home = document.getElementById('home');
+    if (home) home.hidden = false;
+    document.querySelectorAll('[data-game-panel]').forEach((panel) => { panel.hidden = true; });
+  }
+
+  function showGameTab(tabId) {
+    const game = GAME_VIEWS[openGameId];
+    if (!game) return;
+    gameTab = tabId;
+    const buttons = [...document.querySelectorAll('#game-tablist [role="tab"]')];
+    buttons.forEach((btn) => {
+      const on = btn.dataset.tab === tabId;
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+      btn.tabIndex = on ? 0 : -1;
+    });
+    document.querySelectorAll('[data-game-panel]').forEach((panel) => {
+      panel.hidden = !(panel.dataset.gamePanel === openGameId && panel.dataset.tab === tabId);
+    });
+    if (tabId === 'map') drawMap();
+    else if (gameView) gameView.dataset.mapready = '1';
+  }
+
+  document.getElementById('game-tablist').addEventListener('keydown', (e) => {
+    const buttons = [...document.querySelectorAll('#game-tablist [role="tab"]')];
+    const index = buttons.indexOf(document.activeElement);
+    if (index < 0) return;
+    let next = null;
+    if (e.key === 'ArrowRight') next = buttons[(index + 1) % buttons.length];
+    else if (e.key === 'ArrowLeft') next = buttons[(index - 1 + buttons.length) % buttons.length];
+    else if (e.key === 'Home') next = buttons[0];
+    else if (e.key === 'End') next = buttons[buttons.length - 1];
+    if (!next) return;
+    e.preventDefault();
+    showGameTab(next.dataset.tab);
+    next.focus();
+  });
+  document.getElementById('game-back').onclick = () => {
+    closeGame();
+    document.getElementById('main').scrollTop = 0;
+  };
+  document.querySelectorAll('[data-open-game]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openGame(btn.dataset.openGame);
+    });
+  });
+  document.querySelectorAll('[data-game-card]').forEach((card) => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      if (GAME_VIEWS[card.dataset.gameCard]) openGame(card.dataset.gameCard);
+    });
+  });
+
+  // Local profile summary. Painted only inside the open game's panels.
 
   function formatUnix(sec) {
     if (!Number.isFinite(sec)) return '';
@@ -956,21 +1068,56 @@ window.onload = () => {
       li.append(what, when);
       history.appendChild(li);
     }
-    showMapTab(mapTab);
+    if (gameTab === 'map') drawMap();
   }
 
-  function showMapTab(on) {
-    mapTab = !!on;
-    document.getElementById('tgc-panel-map').hidden = !mapTab;
-    document.getElementById('tgc-panel-detail').hidden = mapTab;
-    const detailBtn = document.getElementById('tgc-tab-detail');
-    const mapBtn = document.getElementById('tgc-tab-map');
-    detailBtn.classList.toggle('is-on', !mapTab);
-    mapBtn.classList.toggle('is-on', mapTab);
-    detailBtn.setAttribute('aria-selected', mapTab ? 'false' : 'true');
-    mapBtn.setAttribute('aria-selected', mapTab ? 'true' : 'false');
-    if (mapTab) drawMap();
-    else tgcRoot.dataset.mapready = '1';
+  function paintMapPicker() {
+    const picker = document.getElementById('tgc-map-picker');
+    if (!picker) return;
+    picker.textContent = '';
+    if (!snapshotView) return;
+    const cards = (snapshotView.alive || []).concat(snapshotView.graveyard || []);
+    cards.forEach((card) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-sm' + (card.characterId === selectedId ? ' is-on' : '');
+      btn.textContent = card.name;
+      btn.onclick = () => {
+        selectedId = card.characterId;
+        paintRoster();
+        paintDetail();
+        paintMapPicker();
+        drawMap();
+      };
+      picker.appendChild(btn);
+    });
+  }
+
+  function paintLastCharacter() {
+    const button = document.getElementById('tgc-last');
+    const empty = document.getElementById('tgc-last-empty');
+    const name = document.getElementById('tgc-last-name');
+    const sub = document.getElementById('tgc-last-sub');
+    const cards = snapshotView ? snapshotView.alive.concat(snapshotView.graveyard) : [];
+    const card = snapshotView && snapshotView.lastCharacterId
+      ? (cards.find((c) => c.characterId === snapshotView.lastCharacterId) || null)
+      : null;
+    if (!card) {
+      button.hidden = true;
+      empty.hidden = false;
+      name.textContent = '';
+      sub.textContent = '';
+      return;
+    }
+    button.hidden = false;
+    empty.hidden = true;
+    name.textContent = card.name;
+    const parts = [];
+    if (card.speciesId) parts.push(card.speciesId);
+    if (card.status === 'DEAD') parts.push(card.daysSurvived === null ? 'Dead' : `Died after ${card.daysSurvived} days`);
+    else if (card.level !== null) parts.push(`level ${card.level}`);
+    if (Number.isFinite(card.lastUpdatedUnix)) parts.push(`updated ${formatUnix(card.lastUpdatedUnix)}`);
+    sub.textContent = parts.join(' · ');
   }
 
   function drawMap() {
@@ -978,7 +1125,7 @@ window.onload = () => {
     const canvas = document.getElementById('tgc-map');
     const pin = document.getElementById('tgc-map-pin');
     const caption = document.getElementById('tgc-map-caption');
-    tgcRoot.dataset.mapready = '';
+    if (gameView) gameView.dataset.mapready = '';
     pin.hidden = true;
     const pack = card && card.map && card.map.worldKey ? snapshotView.maps[card.map.worldKey] : null;
     const lines = [];
@@ -988,7 +1135,7 @@ window.onload = () => {
     if (card && card.map && card.map.message) lines.push(card.map.message);
     if (!card || !card.map || (card.map.mode !== 'fog' && card.map.mode !== 'pin') || !pack || !pack.imageDataUrl) {
       caption.textContent = lines.join(' · ') || 'No map data yet.';
-      tgcRoot.dataset.mapready = '1';
+      if (gameView) gameView.dataset.mapready = '1';
       return;
     }
     caption.textContent = lines.join(' · ');
@@ -1016,53 +1163,59 @@ window.onload = () => {
         pin.style.left = `${(card.map.pin.u / w) * 100}%`;
         pin.style.top = `${(card.map.pin.v / h) * 100}%`;
       }
-      tgcRoot.dataset.mapready = '1';
+      if (gameView) gameView.dataset.mapready = '1';
     };
     img.onerror = () => {
       caption.textContent = 'No map data yet.';
-      tgcRoot.dataset.mapready = '1';
+      if (gameView) gameView.dataset.mapready = '1';
     };
     img.src = pack.imageDataUrl;
   }
 
   function renderSnapshot(view) {
-    if (!tgcRoot || !tgcNav) return;
-    snapshotView = view;
-    if (!view || !view.enabled) {
-      tgcRoot.hidden = true;
-      tgcNav.hidden = true;
-      tgcRoot.dataset.state = (view && view.state) || 'disabled';
-      tgcRoot.dataset.mapready = '1';
-      return;
+    snapshotView = view || { enabled: false, state: 'disabled', message: 'Profile summary is off in this build.', alive: [], graveyard: [] };
+    if (gameView) {
+      gameView.dataset.state = snapshotView.state || 'disabled';
+      gameView.dataset.mapready = '1';
     }
-    tgcRoot.hidden = false;
-    tgcNav.hidden = false;
-    tgcRoot.dataset.state = view.state;
-    const banner = document.getElementById('tgc-banner');
-    const blocking = view.state !== 'ok' && view.state !== 'stale';
-    if (view.message) {
-      banner.hidden = false;
-      banner.textContent = view.message;
-      banner.classList.toggle('warn', view.state === 'stale');
-    } else {
-      banner.hidden = true;
-      banner.textContent = '';
+    const banner = document.getElementById('game-status');
+    const blocking = !snapshotView.enabled || (snapshotView.state !== 'ok' && snapshotView.state !== 'stale');
+    if (banner) {
+      if (blocking || snapshotView.message) {
+        banner.hidden = false;
+        banner.textContent = snapshotView.message || 'Play once to see your characters.';
+        banner.classList.toggle('warn', snapshotView.state === 'stale');
+      } else {
+        banner.hidden = true;
+        banner.textContent = '';
+        banner.classList.remove('warn');
+      }
     }
-    document.getElementById('tgc-account').hidden = blocking;
-    document.querySelector('.tgc-characters').hidden = blocking;
-    if (blocking) {
-      tgcRoot.dataset.mapready = '1';
-      return;
-    }
-    const known = snapshotView.alive.concat(snapshotView.graveyard).some((c) => c.characterId === selectedId);
-    if (!known) selectedId = (snapshotView.alive[0] || snapshotView.graveyard[0] || {}).characterId || null;
-    renderProfile(view);
+    const overview = document.getElementById('tgc-overview-body');
+    const characters = document.getElementById('tgc-characters-body');
+    const mapBody = document.getElementById('tgc-map-body');
+    if (overview) overview.hidden = blocking;
+    if (characters) characters.hidden = blocking;
+    if (mapBody) mapBody.hidden = blocking;
+    if (blocking) return;
+    const cards = snapshotView.alive.concat(snapshotView.graveyard);
+    const known = cards.some((c) => c.characterId === selectedId);
+    if (!known) selectedId = snapshotView.lastCharacterId || (cards[0] && cards[0].characterId) || null;
+    renderProfile(snapshotView);
+    paintLastCharacter();
     paintRoster();
     paintDetail();
+    paintMapPicker();
   }
 
-  document.getElementById('tgc-tab-detail').onclick = () => showMapTab(false);
-  document.getElementById('tgc-tab-map').onclick = () => showMapTab(true);
+  document.getElementById('tgc-last').onclick = () => {
+    if (!snapshotView || !snapshotView.lastCharacterId) return;
+    selectedId = snapshotView.lastCharacterId;
+    paintRoster();
+    paintDetail();
+    paintMapPicker();
+    showGameTab('characters');
+  };
 
   async function loadSnapshot() {
     if (!launcher.getSnapshot) return;
@@ -1076,6 +1229,7 @@ window.onload = () => {
   const navButtons = document.querySelectorAll('.nav [data-scroll]');
   navButtons.forEach(btn => {
     btn.onclick = () => {
+      closeGame();
       navButtons.forEach(b => b.classList.toggle('active', b === btn));
       const target = document.getElementById(btn.dataset.scroll);
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
