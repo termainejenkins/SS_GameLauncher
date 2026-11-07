@@ -22,7 +22,9 @@ const STRING_MAX = 64;
 const WORLD_KEY_MAX = 64;
 const WORLD_KEY_RE = /^[A-Za-z0-9_]+$/;
 const MAP_IMAGE_MAX_PX = 4096;
-const MAP_PNG_MAX_BYTES = 12 * 1024 * 1024;
+const MAP_JSON_MAX_BYTES = 256 * 1024;
+const MAP_PNG_MAX_BYTES = 8 * 1024 * 1024;
+const { readRootedFile } = require('./rooted-read');
 const FOG_RESOLUTION_MAX = 256;
 
 const MESSAGES = Object.freeze({
@@ -505,50 +507,29 @@ function fail(state, message) {
   return { ok: false, state, message, summary: null };
 }
 
-function readSnapshotFile(filePath, { now, fsImpl = fs } = {}) {
-  let st;
-  try {
-    st = fsImpl.statSync(filePath);
-  } catch (err) {
-    if (err && err.code === 'ENOENT') return fail('missing', MESSAGES.missing);
-    return fail('unreadable', MESSAGES.unreadable);
-  }
-  if (!st.isFile()) return fail('corrupt', MESSAGES.damaged);
-  if (st.size > MAX_SNAPSHOT_BYTES) return fail('oversize', MESSAGES.oversize);
-  let buf;
-  try {
-    buf = fsImpl.readFileSync(filePath);
-  } catch (_) {
-    return fail('unreadable', MESSAGES.unreadable);
-  }
-  if (buf.length > MAX_SNAPSHOT_BYTES) return fail('oversize', MESSAGES.oversize);
-  return parseSnapshot(buf, now);
+function snapshotReadError(reason) {
+  if (reason === 'missing') return fail('missing', MESSAGES.missing);
+  if (reason === 'oversize') return fail('oversize', MESSAGES.oversize);
+  return fail('unreadable', MESSAGES.unreadable);
 }
 
-function insideDirectory(dir, file) {
-  const root = path.resolve(dir);
-  const resolved = path.resolve(file);
-  const rel = path.relative(root, resolved);
-  return rel === path.basename(resolved) && rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+async function readSnapshotFile(filePath, { now, rootDir } = {}) {
+  const root = rootDir || path.dirname(filePath);
+  const read = await readRootedFile(root, filePath, { maxBytes: MAX_SNAPSHOT_BYTES });
+  if (!read.ok) return snapshotReadError(read.reason);
+  return parseSnapshot(read.data, now);
 }
 
-function loadMapPackage(dir, worldKey, fsImpl = fs) {
+async function loadMapMeta(dir, worldKey) {
   const names = mapPackageNames(worldKey);
   if (!names) return { ok: false, reason: 'bad_world_key' };
   const jsonPath = path.join(dir, names.json);
   const pngPath = path.join(dir, names.png);
-  if (!insideDirectory(dir, jsonPath) || !insideDirectory(dir, pngPath)) {
-    return { ok: false, reason: 'bad_world_key' };
-  }
-  let raw;
-  try {
-    raw = fsImpl.readFileSync(jsonPath, 'utf8');
-  } catch (_) {
-    return { ok: false, reason: 'no_package' };
-  }
+  const read = await readRootedFile(dir, jsonPath, { maxBytes: MAP_JSON_MAX_BYTES });
+  if (!read.ok) return { ok: false, reason: read.reason === 'missing' ? 'no_package' : 'bad_package' };
   let data;
   try {
-    data = JSON.parse(String(raw).replace(/^\uFEFF/, ''));
+    data = JSON.parse(read.data.toString('utf8').replace(/^\uFEFF/, ''));
   } catch (_) {
     return { ok: false, reason: 'bad_package' };
   }
@@ -565,14 +546,8 @@ function loadMapPackage(dir, worldKey, fsImpl = fs) {
     return { ok: false, reason: 'bad_package' };
   }
   if (!(boundsMax[0] > boundsMin[0]) || !(boundsMax[1] > boundsMin[1])) return { ok: false, reason: 'bad_package' };
-  let png;
-  try {
-    png = fsImpl.readFileSync(pngPath);
-  } catch (_) {
-    return { ok: false, reason: 'no_package' };
-  }
-  if (!Buffer.isBuffer(png) || png.length < 8 || png.length > MAP_PNG_MAX_BYTES) return { ok: false, reason: 'bad_package' };
-  if (png[0] !== 0x89 || png.toString('ascii', 1, 4) !== 'PNG') return { ok: false, reason: 'bad_package' };
+  const pngStat = await readRootedFile(dir, pngPath, { maxBytes: MAP_PNG_MAX_BYTES, statOnly: true });
+  if (!pngStat.ok) return { ok: false, reason: pngStat.reason === 'missing' ? 'no_package' : 'bad_package' };
   const yAxis = typeof data.yAxis === 'string' ? data.yAxis : 'worldXIsImageTop';
   return {
     ok: true,
@@ -583,8 +558,19 @@ function loadMapPackage(dir, worldKey, fsImpl = fs) {
     imageW,
     imageH,
     yAxis,
-    imageDataUrl: `data:image/png;base64,${png.toString('base64')}`,
   };
+}
+
+async function readMapImage(dir, worldKey) {
+  const names = mapPackageNames(worldKey);
+  if (!names) return { ok: false, reason: 'bad_world_key' };
+  const read = await readRootedFile(dir, path.join(dir, names.png), { maxBytes: MAP_PNG_MAX_BYTES });
+  if (!read.ok) return { ok: false, reason: read.reason };
+  const png = read.data;
+  if (png.length < 8 || png[0] !== 0x89 || png.toString('ascii', 1, 4) !== 'PNG') {
+    return { ok: false, reason: 'bad_package' };
+  }
+  return { ok: true, dataUrl: `data:image/png;base64,${png.toString('base64')}` };
 }
 
 function pair(value) {
@@ -728,14 +714,13 @@ function resolveDataDir({ isPackaged, env } = {}) {
  * opts.isPackaged + opts.env decide the gate. opts.fsImpl is for tests.
  * opts.now is unix seconds.
  */
-function loadLauncherSnapshot(opts = {}) {
+async function loadLauncherSnapshot(opts = {}) {
   const env = opts.env || process.env;
   const located = resolveDataDir({ isPackaged: !!opts.isPackaged, env });
   if (!located.enabled) return disabledView();
-  const fsImpl = opts.fsImpl || fs;
   const now = Number.isFinite(opts.now) ? opts.now : Math.floor(Date.now() / 1000);
   const dir = located.dir;
-  const parsed = readSnapshotFile(path.join(dir, SNAPSHOT_FILE_NAME), { now, fsImpl });
+  const parsed = await readSnapshotFile(path.join(dir, SNAPSHOT_FILE_NAME), { now, rootDir: dir });
   if (!parsed.ok) {
     return {
       ...disabledView(),
@@ -749,10 +734,9 @@ function loadLauncherSnapshot(opts = {}) {
   for (const character of parsed.summary.characters) {
     const key = character.location && character.location.worldKey;
     if (!key || packages[key]) continue;
-    packages[key] = loadMapPackage(dir, key, fsImpl);
+    packages[key] = await loadMapMeta(dir, key);
     if (packages[key].ok) {
       maps[key] = {
-        imageDataUrl: packages[key].imageDataUrl,
         imageW: packages[key].imageW,
         imageH: packages[key].imageH,
       };
@@ -809,8 +793,11 @@ module.exports = {
   fogCellRect,
   parseSnapshot,
   readSnapshotFile,
-  loadMapPackage,
+  loadMapMeta,
+  readMapImage,
   loadLauncherSnapshot,
+  MAP_JSON_MAX_BYTES,
+  MAP_PNG_MAX_BYTES,
   normalizeStatusEffects,
   displayPersona,
   readSteamPersonaName,

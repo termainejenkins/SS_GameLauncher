@@ -260,9 +260,9 @@ function steamPersonaIfReady() {
   }
 }
 
-function readSnapshot() {
+async function readSnapshot() {
   try {
-    const view = snapshot.loadLauncherSnapshot({
+    const view = await snapshot.loadLauncherSnapshot({
       isPackaged: app.isPackaged,
       env: process.env,
       now: Math.floor(Date.now() / 1000),
@@ -306,24 +306,34 @@ function contentOpts() {
   return { isPackaged: app.isPackaged, env: process.env };
 }
 
-ipcMain.handle('tgc:lore', () => {
-  try { return tgcContent.loadLoreLibrary(contentOpts()); }
+ipcMain.handle('tgc:lore', async () => {
+  try { return await tgcContent.loadLoreLibrary(contentOpts()); }
   catch (_) { return { enabled: false, state: 'unreadable', unlocked: 0, total: 0, categories: [], ignored: [] }; }
 });
 
-ipcMain.handle('tgc:lore-image', (_event, id) => {
-  try { return tgcContent.readLoreImage(contentOpts(), id); }
+ipcMain.handle('tgc:lore-image', async (_event, id) => {
+  try { return await tgcContent.readLoreImage(contentOpts(), id); }
   catch (_) { return { ok: false, reason: 'unreadable' }; }
 });
 
-ipcMain.handle('tgc:photos', (_event, characterId) => {
-  try { return tgcContent.loadPhotoIndex(contentOpts(), characterId); }
+ipcMain.handle('tgc:photos', async (_event, characterId) => {
+  try { return await tgcContent.loadPhotoIndex(contentOpts(), characterId); }
   catch (_) { return { enabled: false, state: 'unreadable', photos: [], truncated: false, photoCount: null }; }
 });
 
-ipcMain.handle('tgc:photo', (_event, characterId, file) => {
-  try { return tgcContent.readPhotoFile(contentOpts(), characterId, file); }
+ipcMain.handle('tgc:photo', async (_event, characterId, file) => {
+  try { return await tgcContent.readPhotoFile(contentOpts(), characterId, file); }
   catch (_) { return { ok: false, reason: 'unreadable' }; }
+});
+
+ipcMain.handle('tgc:map-image', async (_event, worldKey) => {
+  try {
+    const located = snapshot.resolveDataDir({ isPackaged: app.isPackaged, env: process.env });
+    if (!located.enabled) return { ok: false, reason: 'disabled' };
+    return await snapshot.readMapImage(located.dir, worldKey);
+  } catch (_) {
+    return { ok: false, reason: 'unreadable' };
+  }
 });
 
 // ---------------- developer tools (signed "developer" entitlement, fresh server fetch) ----------------

@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('launcher', {
   getLoreImage: (id) => ipcRenderer.invoke('tgc:lore-image', String(id || '')),
   getPhotos: (characterId) => ipcRenderer.invoke('tgc:photos', String(characterId || '')),
   getPhoto: (characterId, file) => ipcRenderer.invoke('tgc:photo', String(characterId || ''), String(file || '')),
+  getMapImage: (worldKey) => ipcRenderer.invoke('tgc:map-image', String(worldKey || '')),
 
   // Launcher self-update (website install only; the Steam copy is updated by Steam)
   getUpdateStatus: () => ipcRenderer.invoke('updater:status'),

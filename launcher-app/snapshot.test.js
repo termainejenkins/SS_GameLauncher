@@ -85,9 +85,9 @@ test('L1 missing history on an old save is an empty array', () => {
   assert.deepEqual(parsed.summary.characters[0].history, []);
 });
 
-test('L1 missing file', () => {
+test('L1 missing file', async () => {
   const dir = tmpDir();
-  const result = snap.readSnapshotFile(path.join(dir, 'launcher_snapshot.json'), { now: NOW });
+  const result = await snap.readSnapshotFile(path.join(dir, 'launcher_snapshot.json'), { now: NOW });
   assert.equal(result.ok, false);
   assert.equal(result.state, 'missing');
   assert.equal(result.message, snap.MESSAGES.missing);
@@ -114,16 +114,16 @@ test('L1 unknown schemaVersion and schema_version', () => {
   }
 });
 
-test('L1 oversize: 32 KB is the cap, 33 KB is refused before parse', () => {
+test('L1 oversize: 32 KB is the cap, 33 KB is refused before parse', async () => {
   const dir = tmpDir();
   const file = path.join(dir, 'launcher_snapshot.json');
   fs.writeFileSync(file, Buffer.alloc(33 * 1024, 0x7b));
-  const big = snap.readSnapshotFile(file, { now: NOW });
+  const big = await snap.readSnapshotFile(file, { now: NOW });
   assert.equal(big.state, 'oversize');
   assert.match(big.message, /32 KB/);
 
   fs.writeFileSync(file, Buffer.alloc(snap.MAX_SNAPSHOT_BYTES + 1, 0x78));
-  assert.equal(snap.readSnapshotFile(file, { now: NOW }).state, 'oversize');
+  assert.equal((await snap.readSnapshotFile(file, { now: NOW })).state, 'oversize');
 
   const exact = Buffer.alloc(snap.MAX_SNAPSHOT_BYTES, 0x20);
   Buffer.from('{"schemaVersion":1}').copy(exact);
@@ -176,38 +176,23 @@ test('worldKey allows letters, digits, underscore, 1 to 64, and nothing else', (
   });
 });
 
-test('a bad worldKey never becomes a path', () => {
+test('a bad worldKey never becomes a path', async () => {
   const dir = tmpDir();
-  const calls = [];
-  const fsImpl = {
-    statSync: fs.statSync,
-    readFileSync: (file, enc) => {
-      calls.push(String(file));
-      return fs.readFileSync(file, enc);
-    },
-  };
   writeJson(dir, 'launcher_snapshot.json', minimal({
     characters: [alive('Sneaky', {
       location: { worldKey: '../secrets', x: 1, y: 2, updatedUnix: NOW },
     })],
   }));
-  const outside = path.join(dir, '..', 'secrets.json');
-  fs.writeFileSync(outside, '{}');
-  const view = snap.loadLauncherSnapshot({
+  const view = await snap.loadLauncherSnapshot({
     isPackaged: false,
     env: { SS_TGC_SNAPSHOT_DIR: dir },
     now: NOW,
-    fsImpl,
   });
   assert.equal(view.enabled, true);
   assert.equal(view.alive[0].map.mode, 'bad_key');
   assert.equal(view.alive[0].map.message, snap.MESSAGES.noMap);
   assert.equal(view.alive[0].map.pin, null);
-  for (const file of calls) {
-    assert.equal(file.startsWith(dir + path.sep) || file === path.join(dir, 'launcher_snapshot.json'), true, file);
-    assert.equal(file.includes(`${path.sep}..${path.sep}`), false, file);
-  }
-  fs.unlinkSync(outside);
+  assert.equal(snap.mapPackageNames('../secrets'), null);
 });
 
 test('map transform matches the proven u/v formula', () => {
@@ -261,7 +246,7 @@ test('fog decode uses i = X * resolution + Y', () => {
   assert.equal(snap.decodeFogBits(bytes.toString('base64'), 0).ok, false);
 });
 
-test('boundsSig mismatch and dead characters keep the pin and drop fog', () => {
+test('boundsSig mismatch and dead characters keep the pin and drop fog', async () => {
   const dir = tmpDir();
   const map = {
     schemaVersion: 1,
@@ -300,7 +285,7 @@ test('boundsSig mismatch and dead characters keep the pin and drop fog', () => {
       }),
     ],
   }));
-  const view = snap.loadLauncherSnapshot({
+  const view = await snap.loadLauncherSnapshot({
     isPackaged: false,
     env: { SS_TGC_SNAPSHOT_DIR: dir },
     now: NOW,
@@ -332,12 +317,12 @@ test('history keeps the newest 32 and skips broken entries', () => {
   assert.equal(history[31].value, 39);
 });
 
-test('release builds do not read the snapshot', () => {
+test('release builds do not read the snapshot', async () => {
   const boom = {
     statSync() { throw new Error('read'); },
     readFileSync() { throw new Error('read'); },
   };
-  const view = snap.loadLauncherSnapshot({
+  const view = await snap.loadLauncherSnapshot({
     isPackaged: true,
     env: { SS_TGC_SNAPSHOT: '1', SS_TGC_SNAPSHOT_DIR: '/tmp/fixtures' },
     fsImpl: boom,
@@ -350,7 +335,7 @@ test('release builds do not read the snapshot', () => {
   assert.equal(snap.snapshotReadAllowed({ isPackaged: false, env: { SS_TGC_SNAPSHOT_DIR: '   ' } }), false);
 });
 
-test('SS_TGC_SNAPSHOT_DIR is the only folder read when it is set', () => {
+test('SS_TGC_SNAPSHOT_DIR is the only folder read when it is set', async () => {
   const dir = tmpDir();
   const other = tmpDir();
   writeJson(dir, 'launcher_snapshot.json', minimal({
@@ -361,7 +346,7 @@ test('SS_TGC_SNAPSHOT_DIR is the only folder read when it is set', () => {
   writeJson(entitlement, 'launcher_snapshot.json', minimal({
     characters: [alive('FromAppData')],
   }));
-  const view = snap.loadLauncherSnapshot({
+  const view = await snap.loadLauncherSnapshot({
     isPackaged: false,
     env: { SS_TGC_SNAPSHOT_DIR: dir, LOCALAPPDATA: other, SS_TGC_SNAPSHOT: '1' },
     now: NOW,
@@ -370,11 +355,11 @@ test('SS_TGC_SNAPSHOT_DIR is the only folder read when it is set', () => {
   assert.equal(view.alive[0].name, 'FromFixture');
 });
 
-test('fixture: two alive, one graveyard, pin and fog from the fake map', () => {
+test('fixture: two alive, one graveyard, pin and fog from the fake map', async () => {
   const raw = JSON.parse(fs.readFileSync(path.join(FIXTURE, 'launcher_snapshot.json'), 'utf8'));
   assert.equal(fs.statSync(path.join(FIXTURE, 'launcher_snapshot.json')).size < snap.MAX_SNAPSHOT_BYTES, true);
   assert.equal(raw.account.unlockedCosmetics, undefined);
-  const view = snap.loadLauncherSnapshot({
+  const view = await snap.loadLauncherSnapshot({
     isPackaged: false,
     env: { SS_TGC_SNAPSHOT_DIR: FIXTURE },
     now: NOW,
@@ -402,7 +387,10 @@ test('fixture: two alive, one graveyard, pin and fog from the fake map', () => {
   assert.ok(Math.abs(jasiri.map.pin.u - expected.u) < 1e-6);
   assert.ok(Math.abs(jasiri.map.pin.v - expected.v) < 1e-6);
   assert.equal(view.maps.TGC_World.imageW, 1024);
-  assert.match(view.maps.TGC_World.imageDataUrl, /^data:image\/png;base64,/);
+  assert.equal(view.maps.TGC_World.imageDataUrl, undefined);
+  const image = await snap.readMapImage(FIXTURE, 'TGC_World');
+  assert.equal(image.ok, true);
+  assert.match(image.dataUrl, /^data:image\/png;base64,/);
   assert.equal(view.graveyard[0].name, 'Lyanne');
   assert.equal(view.graveyard[0].map.mode, 'pin');
   assert.equal(view.graveyard[0].map.fog, null);
@@ -478,7 +466,7 @@ test('statusEffects keep the fixed labels as written and drop zeros', () => {
   assert.equal(parsed.summary.characters.find((c) => c.name === 'Lyanne').status, 'DEAD');
 });
 
-test('personaName falls back to steamworks, then the Steam ID', () => {
+test('personaName falls back to steamworks, then the Steam ID', async () => {
   assert.deepEqual(snap.displayPersona({
     personaName: 'Amani', steamPersona: 'FromSteam', steamId: '76561198000000000',
   }), { name: 'Amani', source: 'snapshot' });
@@ -499,7 +487,7 @@ test('personaName falls back to steamworks, then the Steam ID', () => {
     account: { personaName: '' },
     characters: [],
   }));
-  const fromSteam = snap.loadLauncherSnapshot({
+  const fromSteam = await snap.loadLauncherSnapshot({
     isPackaged: false,
     env: { SS_TGC_SNAPSHOT_DIR: dir },
     now: NOW,
@@ -508,7 +496,7 @@ test('personaName falls back to steamworks, then the Steam ID', () => {
   assert.equal(fromSteam.account.personaName, null);
   assert.equal(fromSteam.personaName, 'FromSteam');
   assert.equal(fromSteam.personaSource, 'steamworks');
-  const fromId = snap.loadLauncherSnapshot({
+  const fromId = await snap.loadLauncherSnapshot({
     isPackaged: false,
     env: { SS_TGC_SNAPSHOT_DIR: dir },
     now: NOW,

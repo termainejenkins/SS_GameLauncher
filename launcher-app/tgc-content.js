@@ -4,13 +4,16 @@
 // The data directory is the same folder as launcher_snapshot.json (resolveDataDir).
 'use strict';
 
-const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
+const { readRootedFile } = require('./rooted-read');
 
 const LORE_CATALOG_FILE = 'lore_catalog.json';
 const PHOTO_CAP = 200;
 const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 const LORE_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+const LORE_CATALOG_MAX_BYTES = 256 * 1024;
+const PHOTO_INDEX_MAX_BYTES = 256 * 1024;
 const LORE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const PLAIN_PNG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.png$/i;
 
@@ -39,13 +42,6 @@ function isSafeRelativePng(rel) {
   const last = parts[parts.length - 1];
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.png$/i.test(last)) return false;
   return parts.slice(0, -1).every((part) => /^[A-Za-z0-9_-]{1,64}$/.test(part));
-}
-
-function insideTree(rootDir, file) {
-  const root = path.resolve(rootDir);
-  const resolved = path.resolve(file);
-  const rel = path.relative(root, resolved);
-  return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
 function shortText(value, max) {
@@ -144,149 +140,126 @@ function parsePhotoIndex(data) {
   return { ok: true, state: 'ok', photos, truncated };
 }
 
-function readJson(file, fsImpl) {
-  const text = fsImpl.readFileSync(file, 'utf8');
-  return JSON.parse(String(text).replace(/^\uFEFF/, ''));
-}
-
-function unlocksFromSnapshot(dir, fsImpl) {
+async function readCappedJson(rootDir, file, maxBytes) {
+  const read = await readRootedFile(rootDir, file, { maxBytes });
+  if (!read.ok) return read;
   try {
-    const file = path.join(dir, snap().SNAPSHOT_FILE_NAME);
-    const buf = fsImpl.readFileSync(file);
-    const parsed = snap().parseSnapshot(buf, Math.floor(Date.now() / 1000));
-    if (!parsed.ok || !parsed.summary || !parsed.summary.account) return [];
-    return parsed.summary.account.loreUnlocked || [];
+    return { ok: true, data: JSON.parse(read.data.toString('utf8').replace(/^\uFEFF/, '')), size: read.size };
   } catch (_) {
-    return [];
+    return { ok: false, reason: 'corrupt' };
   }
 }
 
-function characterFromSnapshot(dir, fsImpl, characterId) {
-  try {
-    const file = path.join(dir, snap().SNAPSHOT_FILE_NAME);
-    const buf = fsImpl.readFileSync(file);
-    const parsed = snap().parseSnapshot(buf, Math.floor(Date.now() / 1000));
-    if (!parsed.ok || !parsed.summary) return null;
-    return parsed.summary.characters.find((character) => character.characterId === characterId) || null;
-  } catch (_) {
-    return null;
-  }
+async function snapshotSummary(dir) {
+  const parsed = await snap().readSnapshotFile(path.join(dir, snap().SNAPSHOT_FILE_NAME), { rootDir: dir, now: Math.floor(Date.now() / 1000) });
+  return parsed.ok ? parsed.summary : null;
 }
 
-function loadLoreLibrary(opts = {}) {
+async function loadLoreLibrary(opts = {}) {
   const gate = snap().resolveDataDir(opts);
   if (!gate.enabled) return { enabled: false, state: 'disabled', unlocked: 0, total: 0, categories: [], ignored: [] };
-  const fsImpl = opts.fsImpl || fs;
-  let raw;
-  try {
-    raw = fsImpl.readFileSync(path.join(gate.dir, LORE_CATALOG_FILE), 'utf8');
-  } catch (err) {
-    const state = err && err.code === 'ENOENT' ? 'missing' : 'unreadable';
+  const read = await readCappedJson(gate.dir, path.join(gate.dir, LORE_CATALOG_FILE), LORE_CATALOG_MAX_BYTES);
+  if (!read.ok) {
+    const state = read.reason === 'missing' ? 'missing' : (read.reason === 'oversize' ? 'oversize' : 'unreadable');
     return { enabled: true, state, unlocked: 0, total: 0, categories: [], ignored: [] };
   }
-  const parsed = parseLoreCatalog(raw);
+  const parsed = parseLoreCatalog(JSON.stringify(read.data));
   if (!parsed.ok) return { enabled: true, state: parsed.state, unlocked: 0, total: 0, categories: [], ignored: [] };
-  const view = presentLore(parsed.entries, unlocksFromSnapshot(gate.dir, fsImpl));
-  return { enabled: true, state: 'ok', ...view };
+  const summary = await snapshotSummary(gate.dir);
+  const unlockedIds = summary && summary.account ? summary.account.loreUnlocked : [];
+  return { enabled: true, state: 'ok', ...presentLore(parsed.entries, unlockedIds) };
 }
 
-function pngDataUrl(file, fsImpl, maxBytes) {
-  let st;
-  try { st = fsImpl.statSync(file); } catch (_) { return null; }
-  if (!st.isFile() || st.size < 8 || st.size > maxBytes) return null;
-  let buf;
-  try { buf = fsImpl.readFileSync(file); } catch (_) { return null; }
-  if (!Buffer.isBuffer(buf) || buf.length > maxBytes) return null;
-  if (buf[0] !== 0x89 || buf.toString('ascii', 1, 4) !== 'PNG') return null;
-  return `data:image/png;base64,${buf.toString('base64')}`;
-}
-
-function readLoreImage(opts, id) {
+async function readLoreImage(opts, id) {
   if (!isSafeLoreId(id)) return { ok: false, reason: 'bad_id' };
   const gate = snap().resolveDataDir(opts);
   if (!gate.enabled) return { ok: false, reason: 'disabled' };
-  const fsImpl = opts.fsImpl || fs;
-  let raw;
-  try { raw = fsImpl.readFileSync(path.join(gate.dir, LORE_CATALOG_FILE), 'utf8'); } catch (_) { return { ok: false, reason: 'missing' }; }
-  const parsed = parseLoreCatalog(raw);
+  const read = await readCappedJson(gate.dir, path.join(gate.dir, LORE_CATALOG_FILE), LORE_CATALOG_MAX_BYTES);
+  if (!read.ok) return { ok: false, reason: read.reason };
+  const parsed = parseLoreCatalog(JSON.stringify(read.data));
   if (!parsed.ok) return { ok: false, reason: parsed.state };
-  const unlocked = new Set(unlocksFromSnapshot(gate.dir, fsImpl));
+  const summary = await snapshotSummary(gate.dir);
+  const unlocked = new Set(summary && summary.account ? summary.account.loreUnlocked : []);
   const entry = parsed.entries.find((row) => row.id === id);
   if (!entry || !unlocked.has(id) || !entry.image) return { ok: false, reason: 'locked' };
   const file = path.resolve(gate.dir, entry.image);
-  if (!insideTree(gate.dir, file)) return { ok: false, reason: 'bad_path' };
-  const dataUrl = pngDataUrl(file, fsImpl, LORE_IMAGE_MAX_BYTES);
-  if (!dataUrl) return { ok: false, reason: 'missing' };
-  return { ok: true, dataUrl };
+  const png = await readRootedFile(gate.dir, file, { maxBytes: LORE_IMAGE_MAX_BYTES });
+  if (!png.ok || png.data.length < 8 || png.data[0] !== 0x89 || png.data.toString('ascii', 1, 4) !== 'PNG') {
+    return { ok: false, reason: png.ok ? 'bad_package' : png.reason };
+  }
+  return { ok: true, dataUrl: `data:image/png;base64,${png.data.toString('base64')}` };
 }
 
-function photoPin(dir, photo, fsImpl) {
+async function photoPin(dir, photo) {
   if (!photo.worldKey || photo.x === null || photo.y === null) return null;
   const names = snap().mapPackageNames(photo.worldKey);
   if (!names) return null;
-  const jsonPath = path.join(dir, names.json);
-  if (!insideTree(dir, jsonPath) || path.basename(jsonPath) !== names.json) return null;
-  let data;
-  try { data = readJson(jsonPath, fsImpl); } catch (_) { return null; }
-  if (!data || !Array.isArray(data.boundsMin) || !Array.isArray(data.boundsMax)) return null;
+  const read = await readCappedJson(dir, path.join(dir, names.json), snap().MAP_JSON_MAX_BYTES);
+  if (!read.ok || !read.data || !Array.isArray(read.data.boundsMin) || !Array.isArray(read.data.boundsMax)) return null;
   return snap().worldToMapPixel(photo.x, photo.y, {
-    boundsMin: data.boundsMin,
-    boundsMax: data.boundsMax,
-    imageW: data.imageW,
-    imageH: data.imageH,
-    yAxis: data.yAxis,
+    boundsMin: read.data.boundsMin,
+    boundsMax: read.data.boundsMax,
+    imageW: read.data.imageW,
+    imageH: read.data.imageH,
+    yAxis: read.data.yAxis,
   });
 }
 
-function loadPhotoIndex(opts, characterId) {
+const photoIndexCache = new Map();
+
+async function loadPhotoIndex(opts, characterId) {
   const empty = { enabled: true, state: 'none', photos: [], truncated: false, photoCount: null };
   const gate = snap().resolveDataDir(opts);
   if (!gate.enabled) return { ...empty, enabled: false, state: 'disabled' };
-  const fsImpl = opts.fsImpl || fs;
-  const character = characterFromSnapshot(gate.dir, fsImpl, characterId);
+  const summary = await snapshotSummary(gate.dir);
+  const character = summary && summary.characters.find((row) => row.characterId === characterId);
   if (!character || !character.photoIndexPath) return { ...empty, photoCount: character ? character.photoCount : null };
   const indexPath = path.resolve(gate.dir, character.photoIndexPath);
-  if (!insideTree(gate.dir, indexPath)) return empty;
-  let data;
-  try { data = readJson(indexPath, fsImpl); } catch (err) {
-    return { ...empty, state: err && err.code === 'ENOENT' ? 'missing' : 'unreadable', photoCount: character.photoCount };
+  const read = await readCappedJson(gate.dir, indexPath, PHOTO_INDEX_MAX_BYTES);
+  if (!read.ok) {
+    const state = read.reason === 'missing' ? 'missing' : (read.reason === 'oversize' ? 'oversize' : 'unreadable');
+    return { ...empty, state, photoCount: character.photoCount };
   }
-  const parsed = parsePhotoIndex(data);
+  const cacheKey = `${gate.dir}\0${characterId}\0${crypto.createHash('sha256').update(JSON.stringify(read.data)).digest('hex')}`;
+  const hit = photoIndexCache.get(cacheKey);
+  if (hit) return hit;
+  const parsed = parsePhotoIndex(read.data);
   if (!parsed.ok) return { ...empty, state: parsed.state, photoCount: character.photoCount };
   const photos = [];
   const folder = path.dirname(indexPath);
   for (const photo of parsed.photos) {
     const file = path.join(folder, photo.file);
-    if (!insideTree(folder, file) || path.basename(file) !== photo.file) continue;
-    let st;
-    try { st = fsImpl.statSync(file); } catch (_) { continue; }
-    if (!st.isFile() || st.size > PHOTO_MAX_BYTES) continue;
-    photos.push({ ...photo, pin: photoPin(gate.dir, photo, fsImpl) });
+    const stat = await readRootedFile(gate.dir, file, { maxBytes: PHOTO_MAX_BYTES, statOnly: true });
+    if (!stat.ok) continue;
+    photos.push({ ...photo, pin: await photoPin(gate.dir, photo) });
   }
-  return {
+  const value = {
     enabled: true,
     state: 'ok',
     photos,
     truncated: parsed.truncated,
     photoCount: character.photoCount,
   };
+  photoIndexCache.set(cacheKey, value);
+  return value;
 }
 
-function readPhotoFile(opts, characterId, file) {
+async function readPhotoFile(opts, characterId, file) {
   if (!isPlainPngName(file)) return { ok: false, reason: 'bad_file' };
-  const listed = loadPhotoIndex(opts, characterId);
+  const listed = await loadPhotoIndex(opts, characterId);
   if (!listed.enabled) return { ok: false, reason: 'disabled' };
   const photo = (listed.photos || []).find((row) => row.file === file);
   if (!photo) return { ok: false, reason: 'missing' };
   const gate = snap().resolveDataDir(opts);
-  const character = characterFromSnapshot(gate.dir, opts.fsImpl || fs, characterId);
+  const summary = await snapshotSummary(gate.dir);
+  const character = summary && summary.characters.find((row) => row.characterId === characterId);
   if (!character || !character.photoIndexPath) return { ok: false, reason: 'missing' };
-  const png = path.join(path.dirname(path.resolve(gate.dir, character.photoIndexPath)), file);
-  const folder = path.dirname(path.resolve(gate.dir, character.photoIndexPath));
-  if (!insideTree(folder, png)) return { ok: false, reason: 'bad_file' };
-  const dataUrl = pngDataUrl(png, opts.fsImpl || fs, PHOTO_MAX_BYTES);
-  if (!dataUrl) return { ok: false, reason: 'missing' };
-  return { ok: true, dataUrl };
+  const pngPath = path.join(path.dirname(path.resolve(gate.dir, character.photoIndexPath)), file);
+  const png = await readRootedFile(gate.dir, pngPath, { maxBytes: PHOTO_MAX_BYTES });
+  if (!png.ok || png.data.length < 8 || png.data[0] !== 0x89 || png.data.toString('ascii', 1, 4) !== 'PNG') {
+    return { ok: false, reason: png.ok ? 'bad_package' : png.reason };
+  }
+  return { ok: true, dataUrl: `data:image/png;base64,${png.data.toString('base64')}` };
 }
 
 module.exports = {

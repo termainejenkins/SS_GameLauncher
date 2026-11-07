@@ -356,9 +356,9 @@ const good = { v: 1, steamid: '76561198000000000', discord_id: '1', entitlements
       assert.strictEqual('unlockedCosmetics' in parsed.summary.account, false);
       assert.strictEqual(parsed.summary.characters[0].history.length, 1);
     });
-    await t('L1 missing file', () => {
+    await t('L1 missing file', async () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-l1-'));
-      const result = snap.readSnapshotFile(path.join(dir, 'nope.json'), { now });
+      const result = await snap.readSnapshotFile(path.join(dir, 'nope.json'), { now });
       assert.strictEqual(result.state, 'missing');
     });
     await t('L1 bad JSON', () => {
@@ -369,11 +369,11 @@ const good = { v: 1, steamid: '76561198000000000', discord_id: '1', entitlements
       assert.strictEqual(parsed.state, 'unknown_schema');
       assert.ok(/Update the launcher/.test(parsed.message));
     });
-    await t('L1 oversize 33KB', () => {
+    await t('L1 oversize 33KB', async () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-l1-'));
       const file = path.join(dir, 'launcher_snapshot.json');
       fs.writeFileSync(file, Buffer.alloc(33 * 1024, 0x20));
-      assert.strictEqual(snap.readSnapshotFile(file, { now }).state, 'oversize');
+      assert.strictEqual((await snap.readSnapshotFile(file, { now })).state, 'oversize');
     });
     await t('worldKey rejects path characters before a filename is built', () => {
       for (const key of ['../etc', 'TGC/World', 'TGC\\World', 'TGC World', 'TGC-World', '', 'a'.repeat(65)]) {

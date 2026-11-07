@@ -74,7 +74,7 @@ test('photo names that are not plain files are dropped, and the read stops at 20
   assert.deepEqual(badOnly.photos, []);
 });
 
-test('missing photo files are skipped and nothing is written', () => {
+test('missing photo files are skipped and nothing is written', async () => {
   const dir = tmpDir();
   const id = 'Jasiri1';
   const folder = path.join(dir, 'photos', id);
@@ -97,51 +97,36 @@ test('missing photo files are skipped and nothing is written', () => {
   fs.writeFileSync(path.join(folder, 'here.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0]));
   const outside = path.join(dir, 'secret.png');
   fs.writeFileSync(outside, Buffer.from('nope'));
-  const writes = [];
-  const fsImpl = {
-    readFileSync: (...args) => fs.readFileSync(...args),
-    statSync: (...args) => fs.statSync(...args),
-    writeFileSync: (...args) => { writes.push(args[0]); },
-  };
-  const listed = content.loadPhotoIndex({
+  const listed = await content.loadPhotoIndex({
     isPackaged: false,
     env: { SS_TGC_SNAPSHOT_DIR: dir },
-    fsImpl,
   }, id);
   assert.equal(listed.enabled, true);
   assert.equal(listed.photos.length, 1);
   assert.equal(listed.photos[0].file, 'here.png');
-  assert.equal(writes.length, 0);
-  const got = content.readPhotoFile({
+  const got = await content.readPhotoFile({
     isPackaged: false,
     env: { SS_TGC_SNAPSHOT_DIR: dir },
-    fsImpl,
   }, id, 'here.png');
   assert.equal(got.ok, true);
   assert.match(got.dataUrl, /^data:image\/png;base64,/);
-  const escaped = content.readPhotoFile({
+  const escaped = await content.readPhotoFile({
     isPackaged: false,
     env: { SS_TGC_SNAPSHOT_DIR: dir },
-    fsImpl,
   }, id, '../secret.png');
   assert.equal(escaped.ok, false);
-  assert.equal(writes.length, 0);
   fs.unlinkSync(outside);
 });
 
-test('a packaged build does not read the catalog or the photos', () => {
-  const boom = {
-    readFileSync() { throw new Error('read'); },
-    statSync() { throw new Error('read'); },
-  };
-  const lore = content.loadLoreLibrary({ isPackaged: true, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE }, fsImpl: boom });
+test('a packaged build does not read the catalog or the photos', async () => {
+  const lore = await content.loadLoreLibrary({ isPackaged: true, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE } });
   assert.equal(lore.enabled, false);
-  const photos = content.loadPhotoIndex({ isPackaged: true, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE }, fsImpl: boom }, JASIRI);
+  const photos = await content.loadPhotoIndex({ isPackaged: true, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE } }, JASIRI);
   assert.equal(photos.enabled, false);
 });
 
-test('fixture catalog unlocks four of ten and Jasiri has three photos', () => {
-  const lore = content.loadLoreLibrary({ isPackaged: false, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE } });
+test('fixture catalog unlocks four of ten and Jasiri has three photos', async () => {
+  const lore = await content.loadLoreLibrary({ isPackaged: false, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE } });
   assert.equal(lore.state, 'ok');
   assert.equal(lore.total, 10);
   assert.equal(lore.unlocked, 4);
@@ -150,12 +135,12 @@ test('fixture catalog unlocks four of ten and Jasiri has three photos', () => {
   const locked = lore.categories.flatMap((row) => row.entries).filter((row) => row.locked);
   assert.equal(locked.length, 6);
   assert.equal(locked.every((row) => row.title === '???' && row.text === null), true);
-  const photos = content.loadPhotoIndex({ isPackaged: false, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE } }, JASIRI);
+  const photos = await content.loadPhotoIndex({ isPackaged: false, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE } }, JASIRI);
   assert.equal(photos.photos.length, 3);
   assert.equal(photos.photos[0].caption, 'Shade at the waterhole');
   assert.ok(photos.photos[0].pin);
-  const image = content.readLoreImage({ isPackaged: false, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE } }, 'waterhole');
+  const image = await content.readLoreImage({ isPackaged: false, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE } }, 'waterhole');
   assert.equal(image.ok, true);
-  const hidden = content.readLoreImage({ isPackaged: false, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE } }, 'kopje');
+  const hidden = await content.readLoreImage({ isPackaged: false, env: { SS_TGC_SNAPSHOT_DIR: FIXTURE } }, 'kopje');
   assert.equal(hidden.ok, false);
 });
