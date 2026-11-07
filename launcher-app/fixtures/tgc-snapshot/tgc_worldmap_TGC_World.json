@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "worldKey": "TGC_World",
+  "boundsMin": [
+    -200000,
+    -200000
+  ],
+  "boundsMax": [
+    200000,
+    200000
+  ],
+  "boundsSig": 123456789,
+  "imageW": 1024,
+  "imageH": 1024,
+  "capturedUnix": 1793901600,
+  "yAxis": "worldXIsImageTop"
+}

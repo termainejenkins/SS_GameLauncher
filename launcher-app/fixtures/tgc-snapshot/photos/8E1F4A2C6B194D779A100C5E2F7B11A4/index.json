@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "photos": [
+    {
+      "file": "1793987990_1.png",
+      "unixTime": 1793987990,
+      "caption": "Shade at the waterhole",
+      "worldKey": "TGC_World",
+      "x": 123400,
+      "y": -55600,
+      "timeOfDay": "dusk"
+    },
+    {
+      "file": "1793900000_1.png",
+      "unixTime": 1793900000,
+      "caption": "The east ridge",
+      "worldKey": "TGC_World",
+      "x": -40000,
+      "y": 80000
+    },
+    {
+      "file": "1793800000_1.png",
+      "unixTime": 1793800000,
+      "caption": "Tracks in the dust",
+      "worldKey": "TGC_World",
+      "x": 50000,
+      "y": 20000
+    }
+  ]
+}

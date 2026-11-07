@@ -10,6 +10,8 @@ const { handleDebugConsoleToggle } = require('./dev-access');
 const launch = require('./game-launch');
 const updater = require('./updater');
 const bugReport = require('./bug-report');
+const snapshot = require('./snapshot');
+const tgcContent = require('./tgc-content');
 
 const account = createAccountManager({ app, safeStorage, shell, utilityProcess });
 
@@ -89,6 +91,7 @@ function createWindow() {
     try { mainWindow.webContents.closeDevTools(); } catch (_) { /* ignore */ }
   });
 
+  mainWindow.on('focus', () => pushSnapshot());
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 }
 
@@ -162,6 +165,7 @@ function afterGameStarted(r) {
     gameChild = r.child;
     r.child.once('exit', () => {
       gameChild = null;
+      pushSnapshot(); // the game may have just rewritten the local summary
       if (mode === 'close-and-wait') app.quit();
       else if (mode === 'minimize' && mainWindow && !mainWindow.isDestroyed()) mainWindow.restore();
     });
@@ -236,6 +240,100 @@ ipcMain.handle('account:link', (event) =>
 ipcMain.handle('account:cancel-link', () => {
   account.cancelLink();
   return true;
+});
+
+// Local profile summary. Packaged builds do not read the file (spec §6: the privacy
+// line has to be live before any release that does). The renderer only displays this.
+function pushSnapshot() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try { mainWindow.webContents.send('snapshot:updated'); } catch (_) { /* closing */ }
+}
+
+// Persona from steamworks.js only when this process can already read it.
+// init() is not called here: it would take the Steam session the game needs.
+function steamPersonaIfReady() {
+  try {
+    const steamworks = require('steamworks.js');
+    return snapshot.readSteamPersonaName(steamworks);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function readSnapshot() {
+  try {
+    const view = await snapshot.loadLauncherSnapshot({
+      isPackaged: app.isPackaged,
+      env: process.env,
+      now: Math.floor(Date.now() / 1000),
+    });
+    // Only ask steamworks.js when the file has no personaName. Skip init().
+    if (view && view.personaSource === 'steamid') {
+      const steamPersona = steamPersonaIfReady();
+      if (steamPersona) {
+        const shown = snapshot.displayPersona({
+          personaName: view.account && view.account.personaName,
+          steamPersona,
+          steamId: view.steamId,
+        });
+        view.personaName = shown.name;
+        view.personaSource = shown.source;
+      }
+    }
+    return view;
+  } catch (_) {
+    return {
+      enabled: snapshot.snapshotReadAllowed({ isPackaged: app.isPackaged, env: process.env }),
+      state: 'unreadable',
+      message: snapshot.MESSAGES.unreadable,
+      savedAtUnix: null,
+      saveSlotIndex: null,
+      steamId: null,
+      game: null,
+      personaName: null,
+      personaSource: null,
+      account: null,
+      alive: [],
+      graveyard: [],
+      maps: {},
+    };
+  }
+}
+
+ipcMain.handle('snapshot:read', () => readSnapshot());
+
+function contentOpts() {
+  return { isPackaged: app.isPackaged, env: process.env };
+}
+
+ipcMain.handle('tgc:lore', async () => {
+  try { return await tgcContent.loadLoreLibrary(contentOpts()); }
+  catch (_) { return { enabled: false, state: 'unreadable', unlocked: 0, total: 0, categories: [], ignored: [] }; }
+});
+
+ipcMain.handle('tgc:lore-image', async (_event, id) => {
+  try { return await tgcContent.readLoreImage(contentOpts(), id); }
+  catch (_) { return { ok: false, reason: 'unreadable' }; }
+});
+
+ipcMain.handle('tgc:photos', async (_event, characterId) => {
+  try { return await tgcContent.loadPhotoIndex(contentOpts(), characterId); }
+  catch (_) { return { enabled: false, state: 'unreadable', photos: [], truncated: false, photoCount: null }; }
+});
+
+ipcMain.handle('tgc:photo', async (_event, characterId, file) => {
+  try { return await tgcContent.readPhotoFile(contentOpts(), characterId, file); }
+  catch (_) { return { ok: false, reason: 'unreadable' }; }
+});
+
+ipcMain.handle('tgc:map-image', async (_event, worldKey) => {
+  try {
+    const located = snapshot.resolveDataDir({ isPackaged: app.isPackaged, env: process.env });
+    if (!located.enabled) return { ok: false, reason: 'disabled' };
+    return await snapshot.readMapImage(located.dir, worldKey);
+  } catch (_) {
+    return { ok: false, reason: 'unreadable' };
+  }
 });
 
 // ---------------- developer tools (signed "developer" entitlement, fresh server fetch) ----------------

@@ -340,6 +340,65 @@ const good = { v: 1, steamid: '76561198000000000', discord_id: '1', entitlements
       assert.ok(ren.includes('steam://store/${demo}') && ren.includes('https://store.steampowered.com/app/1865070/') && ren.includes("'steam://open/main'"));
     });
   }
+  // L1 launcher snapshot (spec §9 / §11.5). Fuller cases live in snapshot.test.js.
+  {
+    const snap = require('../snapshot');
+    const fs = require('fs'); const os = require('os'); const path = require('path');
+    const now = 1_762_500_000;
+    const minimal = (extra) => ({ schemaVersion: 1, savedAtUnix: now - 60, characters: [], ...extra });
+    await t('L1 valid snapshot', () => {
+      const parsed = snap.parseSnapshot(Buffer.from(JSON.stringify(minimal({
+        account: { lifetimeSurvivalTime: 10, lifetimeCharactersCreated: 2, unlockedCosmetics: ['x'] },
+        characters: [{ characterId: 'a', status: 'ALIVE', progression: { characterName: 'Jasiri' }, history: [{ unixTime: 10, type: 'Hunt', value: 1 }] }],
+      }))), now);
+      assert.strictEqual(parsed.state, 'ok');
+      assert.strictEqual(parsed.summary.account.lifetimeSurvivalTime, 10);
+      assert.strictEqual('unlockedCosmetics' in parsed.summary.account, false);
+      assert.strictEqual(parsed.summary.characters[0].history.length, 1);
+    });
+    await t('L1 missing file', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-l1-'));
+      const result = await snap.readSnapshotFile(path.join(dir, 'nope.json'), { now });
+      assert.strictEqual(result.state, 'missing');
+    });
+    await t('L1 bad JSON', () => {
+      assert.strictEqual(snap.parseSnapshot(Buffer.from('{"schemaVersion":1,'), now).state, 'corrupt');
+    });
+    await t('L1 unknown schemaVersion', () => {
+      const parsed = snap.parseSnapshot(Buffer.from(JSON.stringify({ schema_version: 1, savedAtUnix: now, characters: [] })), now);
+      assert.strictEqual(parsed.state, 'unknown_schema');
+      assert.ok(/Update the launcher/.test(parsed.message));
+    });
+    await t('L1 oversize 33KB', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tgc-l1-'));
+      const file = path.join(dir, 'launcher_snapshot.json');
+      fs.writeFileSync(file, Buffer.alloc(33 * 1024, 0x20));
+      assert.strictEqual((await snap.readSnapshotFile(file, { now })).state, 'oversize');
+    });
+    await t('worldKey rejects path characters before a filename is built', () => {
+      for (const key of ['../etc', 'TGC/World', 'TGC\\World', 'TGC World', 'TGC-World', '', 'a'.repeat(65)]) {
+        assert.strictEqual(snap.isSafeWorldKey(key), false, key);
+        assert.strictEqual(snap.mapPackageNames(key), null, key);
+      }
+      assert.strictEqual(snap.mapPackageNames('TGC_World').png, 'tgc_worldmap_TGC_World.png');
+    });
+    await t('map transform u/v', () => {
+      const pin = snap.worldToMapPixel(123400, -55600, {
+        boundsMin: [-200000, -200000], boundsMax: [200000, 200000], imageW: 1024, imageH: 1024, yAxis: 'worldXIsImageTop',
+      });
+      const u = (-55600 - (-200000)) / (200000 - (-200000)) * 1024;
+      const v = (200000 - 123400) / (200000 - (-200000)) * 1024;
+      assert.ok(Math.abs(pin.u - u) < 1e-9 && Math.abs(pin.v - v) < 1e-9);
+    });
+    await t('fog decode i = X * resolution + Y', () => {
+      const bytes = Buffer.alloc(8);
+      const i = 3 * 8 + 5;
+      bytes[i >> 3] |= 1 << (i & 7);
+      const decoded = snap.decodeFogBits(bytes.toString('base64'), 8);
+      assert.strictEqual(decoded.ok, true);
+      assert.deepStrictEqual(decoded.cells, [{ x: 3, y: 5 }]);
+    });
+  }
   if (skipped) console.log(`${skipped} skipped`);
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
   process.exit(failed ? 1 : 0);

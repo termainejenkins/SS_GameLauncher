@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "game": {
+    "build": "0.4.27-demo",
+    "branch": "default",
+    "engine": "4.27.2"
+  },
+  "savedAtUnix": 1793988000,
+  "saveSlotIndex": 2,
+  "steamId": "76561198000000000",
+  "account": {
+    "personaName": "Amani",
+    "loreUnlocked": [
+      "waterhole",
+      "lion_pride",
+      "acacia",
+      "dusk_hunt",
+      "not_in_catalog"
+    ],
+    "achievements": {
+      "Total_Lions_Hunted": 3,
+      "First_Drink": 1
+    },
+    "loreDiscoveredCount": 12,
+    "loreTotalCount": 80,
+    "photoCount": 4,
+    "lifetimeSurvivalTime": 123456,
+    "lifetimeCharactersCreated": 3,
+    "lifetimeXP": 48200,
+    "longestSurvivalTimeDays": 41,
+    "mostPlayedSpecies": "Lion"
+  },
+  "characters": [
+    {
+      "characterId": "8E1F4A2C6B194D779A100C5E2F7B11A4",
+      "speciesId": "Lion",
+      "speciesByte": 41,
+      "status": "ALIVE",
+      "lastUpdatedUnix": 1793987990,
+      "createdUnix": 1792778400,
+      "progression": {
+        "characterName": "Jasiri",
+        "daysSurvived": 14,
+        "level": 6
+      },
+      "location": {
+        "worldKey": "TGC_World",
+        "region": "TGC_SafariRegion_v1",
+        "sector": "SouthWaterhole",
+        "place": "Acacia shade",
+        "x": 123400,
+        "y": -55600,
+        "updatedUnix": 1793987990
+      },
+      "vitals": {
+        "health": 0.82,
+        "stamina": 0.6,
+        "hunger": 0.3,
+        "thirst": 0.4,
+        "oxygen": 1,
+        "weight": 190,
+        "bodyTemp": 38
+      },
+      "base": {
+        "attack": 40,
+        "defense": 22,
+        "armor": 5,
+        "speed": 600
+      },
+      "statusEffects": [
+        "buffs:2",
+        "boneBreak"
+      ],
+      "photoCount": 3,
+      "photoIndexPath": "photos/8E1F4A2C6B194D779A100C5E2F7B11A4/index.json",
+      "inventorySummary": {
+        "items": 3,
+        "maxSlots": 10
+      },
+      "history": [
+        {
+          "unixTime": 1793728800,
+          "type": "Hunt",
+          "value": 1
+        },
+        {
+          "unixTime": 1793815200,
+          "type": "LevelUp",
+          "value": 5
+        },
+        {
+          "unixTime": 1793901600,
+          "type": "RegionEntered",
+          "value": 1
+        },
+        {
+          "unixTime": 1793984400,
+          "type": "LevelUp",
+          "value": 6
+        }
+      ],
+      "mapDiscovery": [
+        {
+          "worldKey": "TGC_World",
+          "resolution": 64,
+          "boundsSig": 123456789,
+          "bitsB64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAPgPAAAAAAAA/j8AAAAAAAD/fwAAAAAAgP//AAAAAADA//8BAAAAAOD//wMAAAAA4P//AwAAAADw//8HAAAAAPD//wcAAAAA8P//BwAAAADw//8HAAAAAPj//w8AAAAA8P//BwAAAADw//8HAAAAAPD//wcAAAAA8P//BwAAAADg//8DAAAAAOD//wMAAAAAwP//AQAAAACA//8AAAAAAAD/fwAAAAAAAP4/AAAAAAAA+A8AAAAAAACAAAAAAAA=",
+          "discoveredCount": 441,
+          "updatedUnix": 1793987990
+        }
+      ]
+    },
+    {
+      "characterId": "1B6C9D302E444F188A7755D0C3A91E02",
+      "speciesId": "Zebra",
+      "speciesByte": 2,
+      "status": "ALIVE",
+      "lastUpdatedUnix": 1793987920,
+      "createdUnix": 1793210400,
+      "progression": {
+        "characterName": "Kivuli",
+        "daysSurvived": 9,
+        "level": 3
+      },
+      "location": {
+        "worldKey": "TGC_World",
+        "region": "TGC_SafariRegion_v1",
+        "sector": "EastRidge",
+        "x": -40000,
+        "y": 80000,
+        "updatedUnix": 1793987920
+      },
+      "vitals": {
+        "health": 1,
+        "stamina": 0.9,
+        "hunger": 0.2,
+        "thirst": 0.25,
+        "oxygen": 1,
+        "weight": 320,
+        "bodyTemp": 38
+      },
+      "base": {
+        "attack": 18,
+        "defense": 16,
+        "armor": 2,
+        "speed": 720
+      },
+      "statusEffects": [
+        "debuffs:1",
+        "fertile"
+      ],
+      "inventorySummary": {
+        "items": 1,
+        "maxSlots": 8
+      },
+      "history": [],
+      "mapDiscovery": [
+        {
+          "worldKey": "TGC_World",
+          "resolution": 64,
+          "boundsSig": 123456789,
+          "bitsB64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAA/gAAAAAAAAD/AQAAAAAAgP8DAAAAAACA/wMAAAAAAID/AwAAAAAAwP8HAAAAAACA/wMAAAAAAID/AwAAAAAAgP8DAAAAAAAA/wEAAAAAAAD+AAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+          "discoveredCount": 113,
+          "updatedUnix": 1793987920
+        }
+      ]
+    },
+    {
+      "characterId": "77AA01C59D2B4E60B3146F8E0A2D44C8",
+      "speciesId": "Lion",
+      "speciesByte": 41,
+      "status": "DEAD",
+      "lastUpdatedUnix": 1793556000,
+      "createdUnix": 1793296800,
+      "progression": {
+        "characterName": "Lyanne",
+        "daysSurvived": 3,
+        "level": 2
+      },
+      "location": {
+        "worldKey": "TGC_World",
+        "region": "TGC_SafariRegion_v1",
+        "sector": "NorthKopje",
+        "x": 50000,
+        "y": 20000,
+        "updatedUnix": 1793556000
+      },
+      "vitals": {
+        "health": 0,
+        "stamina": 0,
+        "hunger": 1,
+        "thirst": 1,
+        "oxygen": 0,
+        "weight": 160,
+        "bodyTemp": 30
+      },
+      "base": {
+        "attack": 28,
+        "defense": 14,
+        "armor": 3,
+        "speed": 640
+      },
+      "statusEffects": [
+        "burn:3",
+        "pregnant"
+      ],
+      "inventorySummary": {
+        "items": 0,
+        "maxSlots": 10
+      },
+      "history": [
+        {
+          "unixTime": 1793296800,
+          "type": "Created",
+          "value": 0
+        },
+        {
+          "unixTime": 1793469600,
+          "type": "LevelUp",
+          "value": 2
+        },
+        {
+          "unixTime": 1793556000,
+          "type": "Died",
+          "value": 3
+        }
+      ]
+    }
+  ]
+}

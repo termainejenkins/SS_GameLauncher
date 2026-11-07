@@ -27,6 +27,15 @@ contextBridge.exposeInMainWorld('launcher', {
   getDevStatus: () => ipcRenderer.invoke('dev:status'),
   toggleDebugConsole: (open) => ipcRenderer.invoke('dev:toggle-console', !!open),
 
+  // Local profile summary (launcher_snapshot.json). Main decides whether reading is allowed.
+  getSnapshot: () => ipcRenderer.invoke('snapshot:read'),
+  onSnapshotUpdated: (cb) => on('snapshot:updated', cb),
+  getLore: () => ipcRenderer.invoke('tgc:lore'),
+  getLoreImage: (id) => ipcRenderer.invoke('tgc:lore-image', String(id || '')),
+  getPhotos: (characterId) => ipcRenderer.invoke('tgc:photos', String(characterId || '')),
+  getPhoto: (characterId, file) => ipcRenderer.invoke('tgc:photo', String(characterId || ''), String(file || '')),
+  getMapImage: (worldKey) => ipcRenderer.invoke('tgc:map-image', String(worldKey || '')),
+
   // Launcher self-update (website install only; the Steam copy is updated by Steam)
   getUpdateStatus: () => ipcRenderer.invoke('updater:status'),
   installUpdate: () => ipcRenderer.invoke('updater:install'),

@@ -49,7 +49,7 @@ jobs:
         run: npm ci
 
       # launcher-app/package.json "test":
-      #   node --test bug-report.test.js developer.test.js
+      #   node --test bug-report.test.js developer.test.js snapshot.test.js tgc-content.test.js rooted-read.test.js
       - name: Launcher unit tests
         if: runner.os != 'Windows'
         working-directory: launcher-app
@@ -67,7 +67,10 @@ jobs:
           node --test \
             --test-skip-pattern '^install id is a random uuid stored locally and only the sha256 is for upload$' \
             bug-report.test.js \
-            developer.test.js
+            developer.test.js \
+            snapshot.test.js \
+            tgc-content.test.js \
+            rooted-read.test.js
 
       # scripts/selftest.js stays offline unless SELFTEST_LIVE=1. This step
       # does not set that variable, so the five live account-server cases skip.
