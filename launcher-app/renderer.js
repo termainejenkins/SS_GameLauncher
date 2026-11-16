@@ -1142,8 +1142,74 @@ window.onload = () => {
     sub.textContent = parts.join(' · ');
   }
 
+  function setExampleBadge(id, on) {
+    const host = document.getElementById(id);
+    if (!host) return;
+    let badge = host.querySelector(':scope > .tgc-example-badge');
+    if (!on) {
+      if (badge) badge.remove();
+      return;
+    }
+    const label = (window.TGCExamples && window.TGCExamples.BADGE) || 'Example data, not final content';
+    if (!badge) {
+      badge = document.createElement('p');
+      badge.className = 'tgc-example-badge';
+      host.insertBefore(badge, host.firstChild);
+    }
+    badge.textContent = label;
+  }
+
+  function drawExampleMap() {
+    const canvas = document.getElementById('tgc-map');
+    const pin = document.getElementById('tgc-map-pin');
+    const caption = document.getElementById('tgc-map-caption');
+    const w = 640;
+    const h = 360;
+    if (canvas) {
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#3c3c3c';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#7a7a7a';
+      ctx.fillRect(36, 28, w - 72, h - 56);
+      ctx.fillStyle = '#f2f2f2';
+      ctx.font = '600 18px Outfit, sans-serif';
+      ctx.fillText('Example Region', 52, 72);
+    }
+    if (pin) {
+      pin.hidden = false;
+      pin.style.left = '58%';
+      pin.style.top = '46%';
+    }
+    if (caption) caption.textContent = 'Example Region';
+    if (gameView) gameView.dataset.mapready = '1';
+  }
+
+  function paintExamplePhotos() {
+    const grid = document.getElementById('tgc-photo-grid');
+    if (!grid || !window.TGCExamples) return;
+    grid.textContent = '';
+    for (const photo of window.TGCExamples.exampleGallery()) {
+      const tile = document.createElement('div');
+      tile.className = 'tgc-card tgc-photo-thumb tgc-photo-placeholder';
+      const swatch = document.createElement('span');
+      swatch.className = 'tgc-photo-swatch';
+      swatch.setAttribute('role', 'img');
+      swatch.setAttribute('aria-label', photo.caption);
+      const label = document.createElement('span');
+      label.textContent = photo.caption;
+      tile.append(swatch, label);
+      grid.appendChild(tile);
+    }
+  }
+
   async function drawMap() {
     const seq = ++mapSeq;
+    if (snapshotView && snapshotView.example) {
+      drawExampleMap();
+      return;
+    }
     const card = selectedCard();
     const canvas = document.getElementById('tgc-map');
     const pin = document.getElementById('tgc-map-pin');
@@ -1222,19 +1288,22 @@ window.onload = () => {
   }
 
   function renderSnapshot(view) {
-    snapshotView = view || { enabled: false, state: 'disabled', message: 'Profile summary is off in this build.', alive: [], graveyard: [] };
+    const incoming = view || { enabled: false, state: 'disabled', message: 'Profile summary is off in this build.', alive: [], graveyard: [] };
+    const showExample = !!(window.TGCExamples && window.TGCExamples.snapshotNeedsExample(incoming));
+    snapshotView = showExample ? window.TGCExamples.exampleSnapshot() : incoming;
     mapImageCache = { worldKey: null, url: null };
     if (gameView) {
-      gameView.dataset.state = snapshotView.state || 'disabled';
+      gameView.dataset.state = incoming.state || 'disabled';
+      gameView.dataset.example = showExample ? '1' : '0';
       gameView.dataset.mapready = '1';
     }
     const banner = document.getElementById('game-status');
-    const blocking = !snapshotView.enabled || (snapshotView.state !== 'ok' && snapshotView.state !== 'stale');
+    const blocking = !showExample && (!incoming.enabled || (incoming.state !== 'ok' && incoming.state !== 'stale'));
     if (banner) {
-      if (blocking || snapshotView.message) {
+      if (showExample || blocking || incoming.message) {
         banner.hidden = false;
-        banner.textContent = snapshotView.message || 'Play once to see your characters.';
-        banner.classList.toggle('warn', snapshotView.state === 'stale');
+        banner.textContent = incoming.message || 'Play once to see your characters.';
+        banner.classList.toggle('warn', incoming.state === 'stale');
       } else {
         banner.hidden = true;
         banner.textContent = '';
@@ -1251,6 +1320,9 @@ window.onload = () => {
     if (mapBody) mapBody.hidden = blocking;
     if (libraryBody) libraryBody.hidden = blocking;
     if (galleryBody) galleryBody.hidden = blocking;
+    setExampleBadge('tgc-overview-body', showExample);
+    setExampleBadge('tgc-characters-body', showExample);
+    setExampleBadge('tgc-map-body', showExample);
     if (blocking) {
       clearMapSurface();
       mapImageCache = { worldKey: null, url: null };
@@ -1354,7 +1426,9 @@ window.onload = () => {
     let next = { state: 'unreadable', categories: [], unlocked: 0, total: 0 };
     try { next = await launcher.getLore(); } catch (_) { /* keep the empty state */ }
     if (seq !== loreSeq) return;
-    loreView = next;
+    const useExample = !!(window.TGCExamples && window.TGCExamples.loreNeedsExample(next));
+    loreView = useExample ? window.TGCExamples.exampleLore() : next;
+    setExampleBadge('tgc-library-body', useExample);
     paintLore();
     gameView.dataset.libraryready = '1';
   }
@@ -1390,17 +1464,34 @@ window.onload = () => {
     const grid = document.getElementById('tgc-photo-grid');
     const empty = document.getElementById('tgc-photo-empty');
     grid.textContent = '';
+    const snapshotIsExample = !!(snapshotView && snapshotView.example);
+    if (snapshotIsExample && window.TGCExamples && window.TGCExamples.galleryNeedsExample(null, true)) {
+      paintExamplePhotos();
+      setExampleBadge('tgc-gallery-body', true);
+      empty.hidden = true;
+      gameView.dataset.galleryready = '1';
+      return;
+    }
     const card = selectedCard();
     if (!card || !launcher.getPhotos) {
       empty.hidden = false;
       empty.textContent = 'No photos yet.';
+      setExampleBadge('tgc-gallery-body', false);
       gameView.dataset.galleryready = '1';
       return;
     }
     let listed = { photos: [] };
     try { listed = await launcher.getPhotos(card.characterId); }
-    catch (_) { listed = { photos: [] }; }
+    catch (_) { listed = { enabled: false, state: 'unreadable', photos: [] }; }
     if (seq !== gallerySeq) return;
+    if (window.TGCExamples && window.TGCExamples.galleryNeedsExample(listed, false)) {
+      paintExamplePhotos();
+      setExampleBadge('tgc-gallery-body', true);
+      empty.hidden = true;
+      gameView.dataset.galleryready = '1';
+      return;
+    }
+    setExampleBadge('tgc-gallery-body', false);
     const photos = listed && listed.photos ? listed.photos : [];
     empty.hidden = photos.length > 0;
     empty.textContent = 'No photos yet.';
